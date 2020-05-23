@@ -3,6 +3,7 @@
 import re
 import json
 import datetime
+import math
 from pathlib import Path
 
 # Read play JSON, get program number
@@ -68,21 +69,48 @@ for x in images_repo:
   if not x in images_repo_chk:
     print("WARNING: Extra file {} is not needed.".format(x))
 
-# Extract track list
+# Extract track list, preserve album ID from parent object
 tracks = []
 for album in program['albums']:
+  for track in album['tracks']:
+    track.update({'album_id':album['id']})
   tracks.extend(album['tracks'])
 
 # For each track, combine artist lists into single artist value
 for track in tracks:
   track.update({'artist':' & '.join([artist['name'] for artist in track['artists']]).title()})
 
+# Ensure tracks are sorted by startPositionInStream
+# Check to make sure there are no gaps unaccounted for
+tracks.sort(key=lambda x: x.get('startPositionInStream'))
+for i in range(len(tracks)):
+  if i>0:
+    if tracks[i]['startPositionInStream'] != ( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ):
+      raise Exception("Illegal gap in metadata. Track {} ends at {:,} and track {} starts at {:,}.".format(
+        i-1,( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ),
+        i,tracks[i]['startPositionInStream']))
+
 # List the tracks
-print("\nHearts of Space {}: {} ({})\n".format(pgm,program['title'],program['date']))
-for track in tracks:
-  print("{}\t{}\t{:40} {}".format(datetime.timedelta(seconds=track['startPositionInStream']),
-                                  datetime.timedelta(seconds=(track['duration']+track['startPositionInStream'])),
-                                  track['title'],track['artist']))
+print("############################################################")
+print("##################### HEARTS OF SPACE ######################")
+print("############################################################")
+print('Program {}: "{}" ({})'.format(pgm,program['title'].title(),program['date']))
+print('Genre: "{}"'.format(program['genres'][0]['name']))
+print('Number of tracks: {}'.format(len(tracks)))
+#print "Encoding: LAME MP3 " + _encoding_
+print("############################################################")
+
+max_title=max(len(track['title']) for track in tracks)
+max_artist=max(len(track['artist']) for track in tracks)
+max_tid=math.floor(math.log10(len(tracks)))+1
+track_format='{:'+str(max_tid)+'} {:'+str(max_artist)+'}  {:'+str(max_title)+'}  {}'
+
+for i in range(len(tracks)):
+  print(track_format.format(i+1,
+                            tracks[i]['artist'],
+                            tracks[i]['title'],
+                            datetime.timedelta(seconds=tracks[i]['duration'])))
+print("############################################################")
 print("\n")
 
 # Output JSON for debug purposes
