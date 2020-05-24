@@ -10,6 +10,7 @@ import re
 import json
 import datetime
 import math
+import subprocess
 from pathlib import Path
 
 # Parse arguments
@@ -169,35 +170,53 @@ print("############################################################")
 max_title=max(len(track['title']) for track in tracks)
 max_artist=max(len(track['artist']) for track in tracks)
 max_tid=math.floor(math.log10(len(tracks)))+1
-track_format='{:'+str(max_tid)+'} {:'+str(max_artist)+'}  {:'+str(max_title)+'}  {}'
+display_format='{:'+str(max_tid)+'} {:'+str(max_artist)+'}  {:'+str(max_title)+'}  {}'
+wav_format='track{:0'+str(max_tid)+'}.wav'
+mp3_format='track{:0'+str(max_tid)+'}.mp3'
 
 for i in range(len(tracks)):
-  print(track_format.format(i+1,
+  print(display_format.format(i+1,
                             tracks[i]['artist'],
                             tracks[i]['title'],
                             datetime.timedelta(seconds=tracks[i]['duration'])))
 print("############################################################")
 print("\n")
 
+cmds = []
+cmds.extend([['ffmpeg','-i','pgm{}.ts'.format(pgm),'-acodec','pcm_s16le','pgm{}.wav'.format(pgm)]])
+for i in range(len(tracks)):
+  cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),
+    '-af','atrim={}:{}'.format(
+    tracks[i]['startPositionInStream'],
+    tracks[i]['startPositionInStream']+tracks[i]['duration']),wav_format.format(i+1)]])
+
+for i in range(len(tracks)):
+  lame=['lame','-m','j']
+  if mode=="cbr":
+    lame.extend(['-b',mp3_cbr_bitrate])
+  if mode=="vbr":
+    lame.extend(['-V',str(mp3_vbr_quality)])
+  lame.extend(['-q','0',wav_format.format(i+1),mp3_format.format(i+1),
+               '--id3v2-only','--tt',tracks[i]['title'],'--ta',tracks[i]['artist'],
+               '--tl','HoS {}: {}'.format(pgm,program['title'].title()),
+               '--tv','TPE2=Hearts of Space','--ty',program['date'][:4],
+               '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
+               '--tv','TCON={}'.format(program['genres'][0]['name']),'--tv','TCMP=1',
+               '--ti','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])])
+  cmds.extend([lame])
+
 # Concatenate all the TS files together into one
 if args.run:
-  with open("pgm{}.ts".format(pgm),"wb") as out:
+  with open('pgm{}.ts'.format(pgm),'wb') as out:
     for ts in m3u:
       with open('api.hos.com/vo-intro/pgm{}/256k/{}'.format(pgm,ts),'rb') as inp:
         out.write(inp.read())
-
-
-#	_lamecmd_ = ['lame', '-m', 'j', _mode_flag_, _quality_, '-q', '0', _tempwav_, _tempmp3_, '--id3v2-only', '--tt', _track_[t], '--ta', _artist_[t], '--tl', _album_, '--tv', 'TPE2='+_albumartist_, '--ty', _year_, '--tn', str(t+1)+'/'+str(len(_track_))]
-#	if _discnum_!="" and _disctot_!="":
-#		_lamecmd_.extend(['--tv TPOS=1/1'])
-#	if _genre_!="":
-#		_lamecmd_.extend(['--tv', 'TCON='+_genre_])
-#	if _compilation_flag_==1:
-#		_lamecmd_.extend(['--tv', 'TCMP=1'])
-#	if _image_!="":
-#		_lamecmd_.extend(['--ti', _image_])
+  for cmd in cmds:
+    print(cmd)
+    subprocess.run(cmd)
 
 # Output JSON for debug purposes
 with open('debug.json', 'w') as debug:
 #  debug.writelines(json.dumps(program['albums'],indent=2))
-  debug.writelines(json.dumps(tracks,indent=2))
+#  debug.writelines(json.dumps(tracks,indent=2))
+  debug.writelines(json.dumps(program,indent=2))
