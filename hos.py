@@ -74,6 +74,23 @@ else:
   raise Exception("Unknown codec/mode {}/{}.".format(codec,mode))
   
 
+# If doing AAC encoding, then figure out the libfdk_aac version being used.
+# This section ends up with a string, for example, libfdk_aac_version='0.1.6'
+if codec == 'aac':
+  ffmpeg_path=subprocess.run(['which','ffmpeg'],capture_output=True,text=True).stdout.strip()
+  ldd_output=[x.strip() for x in subprocess.run(['ldd',ffmpeg_path],capture_output=True,text=True).stdout.split('\n')]
+  for x in ldd_output:
+    a=x.split('=>')
+    if 'libfdk-aac.so' in a[0]:
+      libfdk=a[1].strip()
+      libfdk_path=re.split(r'(.*/)(.*)',libfdk)[1]
+with open('{}/pkgconfig/fdk-aac.pc'.format(libfdk_path),'r') as pc:
+  pkgconfig=pc.readlines()
+for line in pkgconfig:
+  if 'Version:' in line:
+    libfdk_aac_version=line.split()[1]
+
+
 # Read play JSON, get program number
 with open('api.hos.com/api/v1/player/play','r') as f:
   play = json.load(f)
@@ -217,7 +234,8 @@ for i in range(len(tracks)):
              '-album','HoS {}: {}'.format(pgm,program['title'].title()),
              '-albumartist','Hearts of Space','-year',program['date'][:4],
              '-track',str(i+1),'-tracks',str(len(tracks)),'-disk','1','-disks','1',
-             '-genre',program['genres'][0]['name'],'-compilation','1']
+             '-genre',program['genres'][0]['name'],'-compilation','1',
+             '-tool','Fraunhofer FDK AAC {}'.format(libfdk_aac_version)]
     mp4art=['mp4art','-z','--add','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])]
     mp4tags.extend([m4a_format.format(i+1)])
     mp4art.extend([m4a_format.format(i+1)])
