@@ -22,6 +22,8 @@ parser.add_argument('-b','--bitrate',metavar='BITRATE',dest='bitrate',
                     help='Specify the output bitrate (CBR) or quality (VBR).')
 parser.add_argument('-r','--run',action='store_true',dest='run',
                     help='Actually run the transcode.')
+parser.add_argument('-t','--test',action='store_true',dest='test',
+                    help='Only show the constructed commands, do not execute anything.')
 args=parser.parse_args()
 
 # Validate requested bitrate
@@ -59,7 +61,7 @@ elif codec == 'aac' and mode == 'cbr':
     aac_cbr_bitrate = float(bitrate)
   except:
     aac_cbr_bitrate = float(-1)
-  encoding = 'libfdk_aac AAC CBR {}kbps'.format(aac_cbr_bitrate)
+  encoding = 'Fraunhofer FDK AAC CBR {}kbps'.format(aac_cbr_bitrate)
   if aac_cbr_bitrate < 112 or aac_cbr_bitrate > 320:
     raise argparse.ArgumentTypeError("Invalid CBR bitrate '{}'. AAC CBR bitrate must be between 112 and 320. Higher is better.".format(bitrate))
 elif codec == 'aac' and mode == 'vbr':
@@ -67,7 +69,7 @@ elif codec == 'aac' and mode == 'vbr':
     aac_vbr_quality = bitrate[1:]
   else:
     aac_vbr_quality = ''
-  encoding = 'libfdk_aac AAC VBR {}'.format(aac_vbr_quality)
+  encoding = 'Fraunhofer FDK AAC VBR {}'.format(aac_vbr_quality)
   if not aac_vbr_quality in aac_vbr_bitrates:
     raise argparse.ArgumentTypeError("Invalid VBR quality '{}'. Valid AAC VBR qualities are {}. Higher is better.".format(bitrate,aac_vbr_bitrates))
 else:
@@ -76,6 +78,7 @@ else:
 
 # If doing AAC encoding, then figure out the libfdk_aac version being used.
 # This section ends up with a string, for example, libfdk_aac_version='0.1.6'
+libfdk_aac_version=''
 if codec == 'aac':
   ffmpeg_path=subprocess.run(['which','ffmpeg'],capture_output=True,text=True).stdout.strip()
   ldd_output=[x.strip() for x in subprocess.run(['ldd',ffmpeg_path],capture_output=True,text=True).stdout.split('\n')]
@@ -84,18 +87,30 @@ if codec == 'aac':
     if 'libfdk-aac.so' in a[0]:
       libfdk=a[1].strip()
       libfdk_path=re.split(r'(.*/)(.*)',libfdk)[1]
-with open('{}/pkgconfig/fdk-aac.pc'.format(libfdk_path),'r') as pc:
-  pkgconfig=pc.readlines()
-for line in pkgconfig:
-  if 'Version:' in line:
-    libfdk_aac_version=line.split()[1]
-
+  with open('{}/pkgconfig/fdk-aac.pc'.format(libfdk_path),'r') as pc:
+    pkgconfig=pc.readlines()
+  for line in pkgconfig:
+    if 'Version:' in line:
+      libfdk_aac_version=line.split()[1]
+  if len(libfdk_aac_version)<2:
+    raise Exception("Could not determine version of libfdk_aac library.")
 
 # Read play JSON, get program number
-with open('api.hos.com/api/v1/player/play','r') as f:
-  play = json.load(f)
+try:
+  with open('api.hos.com/api/v1/player/play','r') as f:
+    play = json.load(f)
+  pgm1=re.split(r'(.+pgm)(\d{4})(.*)',play['signedUrl'])[2]
+except:
+  pgm1='0'
 
-pgm=re.split(r'(.+pgm)(\d{4})(.*)',play['signedUrl'])[2]
+# Alternative method to get the program number, cross check
+jsonfiles = [str(x) for x in list(Path('api.hos.com/api/v1/programs').rglob('*')) if x.is_file()]
+if len(jsonfiles)>1:
+  raise Exception('More than one file found under api.hos.com/api/v1/programs')
+pgm2=re.split(r'(.*\/)(\d+)$',jsonfiles[0])[2]
+if pgm1 != '0' and pgm1 != pgm2:
+  raise Exception('Conflict in determining the progran number ({} vs {}).'.format(pgm1,pgm2))
+pgm=pgm2
 
 # Read program metadata JSON
 with open('api.hos.com/api/v1/programs/{}'.format(pgm),'r') as f:
@@ -221,6 +236,7 @@ for i in range(len(tracks)):
                  '--tv','TPE2=Hearts of Space','--ty',program['date'][:4],
                  '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
                  '--tv','TCON={}'.format(program['genres'][0]['name']),'--tv','TCMP=1',
+                 '--tc','Produced by {}'.format(program['producer']),
                  '--ti','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])])
     cmds.extend([lame])
   if codec=='aac':
@@ -235,29 +251,36 @@ for i in range(len(tracks)):
              '-albumartist','Hearts of Space','-year',program['date'][:4],
              '-track',str(i+1),'-tracks',str(len(tracks)),'-disk','1','-disks','1',
              '-genre',program['genres'][0]['name'],'-compilation','1',
+             '-comment','Produced by {}'.format(program['producer']),
              '-tool','Fraunhofer FDK AAC {}'.format(libfdk_aac_version)]
     mp4art=['mp4art','-z','--add','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])]
     mp4tags.extend([m4a_format.format(i+1)])
     mp4art.extend([m4a_format.format(i+1)])
     cmds.extend([ffmpeg,mp4tags,mp4art])
 
-# Concatenate all the TS files together into one
-if args.run:
+# Test run - only show the constructed commands, but don't actually run anything.
+if args.test:
+  for cmd in cmds:
+    print('\033[92m{}\033[0m'.format(cmd))
+
+# Run the full job
+elif args.run:
+
+  # Concatenate all the TS files together into one
   with open('pgm{}.ts'.format(pgm),'wb') as out:
     for ts in m3u:
       with open('api.hos.com/vo-intro/pgm{}/256k/{}'.format(pgm,ts),'rb') as inp:
         out.write(inp.read())
+
+  # Run each of the constructed commands one by one
   for cmd in cmds:
     print('\033[92m{}\033[0m'.format(cmd))
     subprocess.run(cmd,check=True)
+
+  # Delete temporary files
   print("Cleaning up...")
   Path('pgm{}.ts'.format(pgm)).unlink(missing_ok=False)
   Path('pgm{}.wav'.format(pgm)).unlink(missing_ok=False)
   for i in range(len(tracks)):
     Path(wav_format.format(i+1)).unlink(missing_ok=False)
 
-# Output JSON for debug purposes
-#with open('debug.json', 'w') as debug:
-##  debug.writelines(json.dumps(program['albums'],indent=2))
-##  debug.writelines(json.dumps(tracks,indent=2))
-#  debug.writelines(json.dumps(program,indent=2))
