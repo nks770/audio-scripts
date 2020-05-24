@@ -1,10 +1,77 @@
 #!/bin/env python3
 
+# hos.py
+#
+# This script is for processing downloaded stream data for
+# Hearts of Space (https://www.hos.com)
+
+import argparse
 import re
 import json
 import datetime
 import math
 from pathlib import Path
+
+# Parse arguments
+parser = argparse.ArgumentParser(description='Process a Hearts of Space audio stream.')
+parser.add_argument('-c','--codec',metavar='CODEC',dest='codec',
+                    default='mp3',choices={'mp3','aac'},
+                    help='Output codec to use for transcoding. (Default: mp3)')
+parser.add_argument('-b','--bitrate',metavar='BITRATE',dest='bitrate',
+                    help='Specify the output bitrate (CBR) or quality (VBR).')
+parser.add_argument('-r','--run',action='store_true',dest='run',
+                    help='Actually run the transcode.')
+args=parser.parse_args()
+
+# Validate requested bitrate
+mp3_cbr_bitrates = ['32', '40', '48', '56', '64', '80', '96', '112', '128', '160', '192', '224', '256', '320']
+aac_vbr_bitrates = ['1', '2', '3', '4', '5']
+codec = args.codec
+
+if args.bitrate == None and codec == 'mp3':
+  bitrate = 'V2'
+elif args.bitrate == None and codec == 'aac':
+  bitrate = '256'
+else:
+  bitrate = args.bitrate
+
+if bitrate[0].upper() == "V":
+  mode = 'vbr'
+else:
+  mode = 'cbr'
+
+if codec == 'mp3' and mode == 'cbr':
+  mp3_cbr_bitrate = bitrate
+  encoding = 'LAME MP3 CBR {}kbps'.format(mp3_cbr_bitrate)
+  if not mp3_cbr_bitrate in mp3_cbr_bitrates:
+    raise argparse.ArgumentTypeError("Invalid CBR bitrate '{}'. Valid MP3 CBR bitrates are {}. Higher is better.".format(mp3_cbr_bitrate,mp3_cbr_bitrates))
+elif codec == 'mp3' and mode == 'vbr':
+  try:
+    mp3_vbr_quality = float(bitrate[1:])
+  except:
+    mp3_vbr_quality = float(-1)
+  encoding = 'LAME MP3 VBR {}'.format(mp3_vbr_quality)
+  if mp3_vbr_quality < 0 or mp3_vbr_quality > 9.999:
+    raise argparse.ArgumentTypeError("Invalid VBR quality '{}'. MP3 VBR quality must be between 0 and 9.999. Lower is better.".format(bitrate))
+elif codec == 'aac' and mode == 'cbr':
+  try:
+    aac_cbr_bitrate = float(bitrate)
+  except:
+    aac_cbr_bitrate = float(-1)
+  encoding = 'libfdk_aac AAC CBR {}kbps'.format(aac_cbr_bitrate)
+  if aac_cbr_bitrate < 112 or aac_cbr_bitrate > 320:
+    raise argparse.ArgumentTypeError("Invalid CBR bitrate '{}'. AAC CBR bitrate must be between 112 and 320. Higher is better.".format(bitrate))
+elif codec == 'aac' and mode == 'vbr':
+  if len(bitrate)>1:
+    aac_vbr_quality = bitrate[1:]
+  else:
+    aac_vbr_quality = ''
+  encoding = 'libfdk_aac AAC VBR {}'.format(aac_vbr_quality)
+  if not aac_vbr_quality in aac_vbr_bitrates:
+    raise argparse.ArgumentTypeError("Invalid VBR quality '{}'. Valid AAC VBR qualities are {}. Higher is better.".format(bitrate,aac_vbr_bitrates))
+else:
+  raise Exception("Unknown codec/mode {}/{}.".format(codec,mode))
+  
 
 # Read play JSON, get program number
 with open('api.hos.com/api/v1/player/play','r') as f:
@@ -97,9 +164,8 @@ print("############################################################")
 print('Program {}: "{}" ({})'.format(pgm,program['title'].title(),program['date']))
 print('Genre: "{}"'.format(program['genres'][0]['name']))
 print('Number of tracks: {}'.format(len(tracks)))
-#print "Encoding: LAME MP3 " + _encoding_
+print('Encoding: {}'.format(encoding))
 print("############################################################")
-
 max_title=max(len(track['title']) for track in tracks)
 max_artist=max(len(track['artist']) for track in tracks)
 max_tid=math.floor(math.log10(len(tracks)))+1
@@ -112,6 +178,24 @@ for i in range(len(tracks)):
                             datetime.timedelta(seconds=tracks[i]['duration'])))
 print("############################################################")
 print("\n")
+
+# Concatenate all the TS files together into one
+if args.run:
+  with open("pgm{}.ts".format(pgm),"wb") as out:
+    for ts in m3u:
+      with open('api.hos.com/vo-intro/pgm{}/256k/{}'.format(pgm,ts),'rb') as inp:
+        out.write(inp.read())
+
+
+#	_lamecmd_ = ['lame', '-m', 'j', _mode_flag_, _quality_, '-q', '0', _tempwav_, _tempmp3_, '--id3v2-only', '--tt', _track_[t], '--ta', _artist_[t], '--tl', _album_, '--tv', 'TPE2='+_albumartist_, '--ty', _year_, '--tn', str(t+1)+'/'+str(len(_track_))]
+#	if _discnum_!="" and _disctot_!="":
+#		_lamecmd_.extend(['--tv TPOS=1/1'])
+#	if _genre_!="":
+#		_lamecmd_.extend(['--tv', 'TCON='+_genre_])
+#	if _compilation_flag_==1:
+#		_lamecmd_.extend(['--tv', 'TCMP=1'])
+#	if _image_!="":
+#		_lamecmd_.extend(['--ti', _image_])
 
 # Output JSON for debug purposes
 with open('debug.json', 'w') as debug:
