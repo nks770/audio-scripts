@@ -173,6 +173,7 @@ max_tid=math.floor(math.log10(len(tracks)))+1
 display_format='{:'+str(max_tid)+'} {:'+str(max_artist)+'}  {:'+str(max_title)+'}  {}'
 wav_format='track{:0'+str(max_tid)+'}.wav'
 mp3_format='track{:0'+str(max_tid)+'}.mp3'
+m4a_format='track{:0'+str(max_tid)+'}.m4a'
 
 for i in range(len(tracks)):
   print(display_format.format(i+1,
@@ -191,19 +192,36 @@ for i in range(len(tracks)):
     tracks[i]['startPositionInStream']+tracks[i]['duration']),wav_format.format(i+1)]])
 
 for i in range(len(tracks)):
-  lame=['lame','-m','j']
-  if mode=="cbr":
-    lame.extend(['-b',mp3_cbr_bitrate])
-  if mode=="vbr":
-    lame.extend(['-V',str(mp3_vbr_quality)])
-  lame.extend(['-q','0',wav_format.format(i+1),mp3_format.format(i+1),
-               '--id3v2-only','--tt',tracks[i]['title'],'--ta',tracks[i]['artist'],
-               '--tl','HoS {}: {}'.format(pgm,program['title'].title()),
-               '--tv','TPE2=Hearts of Space','--ty',program['date'][:4],
-               '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
-               '--tv','TCON={}'.format(program['genres'][0]['name']),'--tv','TCMP=1',
-               '--ti','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])])
-  cmds.extend([lame])
+  if codec=='mp3':
+    lame=['lame','-m','j']
+    if mode=="cbr":
+      lame.extend(['-b',mp3_cbr_bitrate])
+    if mode=="vbr":
+      lame.extend(['-V',str(mp3_vbr_quality)])
+    lame.extend(['-q','0',wav_format.format(i+1),mp3_format.format(i+1),
+                 '--id3v2-only','--tt',tracks[i]['title'],'--ta',tracks[i]['artist'],
+                 '--tl','HoS {}: {}'.format(pgm,program['title'].title()),
+                 '--tv','TPE2=Hearts of Space','--ty',program['date'][:4],
+                 '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
+                 '--tv','TCON={}'.format(program['genres'][0]['name']),'--tv','TCMP=1',
+                 '--ti','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])])
+    cmds.extend([lame])
+  if codec=='aac':
+    ffmpeg=['ffmpeg','-i',wav_format.format(i+1),'-acodec','libfdk_aac']
+    if mode=="cbr":
+      ffmpeg.extend(['-b:a','{}k'.format(aac_cbr_bitrate)])
+    if mode=="vbr":
+      ffmpeg.extend(['-vbr',aac_vbr_quality])
+    ffmpeg.extend(['-f','mp4',m4a_format.format(i+1)])
+    mp4tags=['mp4tags','-song',tracks[i]['title'],'-artist',tracks[i]['artist'],
+             '-album','HoS {}: {}'.format(pgm,program['title'].title()),
+             '-albumartist','Hearts of Space','-year',program['date'][:4],
+             '-track',str(i+1),'-tracks',str(len(tracks)),'-disk','1','-disks','1',
+             '-genre',program['genres'][0]['name'],'-compilation','1']
+    mp4art=['mp4art','-z','--add','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])]
+    mp4tags.extend([m4a_format.format(i+1)])
+    mp4art.extend([m4a_format.format(i+1)])
+    cmds.extend([ffmpeg,mp4tags,mp4art])
 
 # Concatenate all the TS files together into one
 if args.run:
@@ -212,11 +230,16 @@ if args.run:
       with open('api.hos.com/vo-intro/pgm{}/256k/{}'.format(pgm,ts),'rb') as inp:
         out.write(inp.read())
   for cmd in cmds:
-    print(cmd)
-    subprocess.run(cmd)
+    print('\033[92m{}\033[0m'.format(cmd))
+    subprocess.run(cmd,check=True)
+  print("Cleaning up...")
+  Path('pgm{}.ts'.format(pgm)).unlink(missing_ok=False)
+  Path('pgm{}.wav'.format(pgm)).unlink(missing_ok=False)
+  for i in range(len(tracks)):
+    Path(wav_format.format(i+1)).unlink(missing_ok=False)
 
 # Output JSON for debug purposes
-with open('debug.json', 'w') as debug:
-#  debug.writelines(json.dumps(program['albums'],indent=2))
-#  debug.writelines(json.dumps(tracks,indent=2))
-  debug.writelines(json.dumps(program,indent=2))
+#with open('debug.json', 'w') as debug:
+##  debug.writelines(json.dumps(program['albums'],indent=2))
+##  debug.writelines(json.dumps(tracks,indent=2))
+#  debug.writelines(json.dumps(program,indent=2))
