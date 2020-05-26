@@ -60,7 +60,7 @@ for f in source:
       else:
         raise Exception(f"{bcolors.FAIL}ERROR: Cannot determine type of source file '{f}'!{bcolors.ENDC}")
 
-# Read metadata from source files
+# Read metadata from source files using ffprobe (part of ffmpeg)
 for ff in files:
   ffprobe = ['ffprobe', ff['name']]
   ffprobe_data = subprocess.run(ffprobe,capture_output=True,text=True).stderr.split('Metadata:')[1].split('\n')
@@ -68,6 +68,9 @@ for ff in files:
     if 'album_artist'==d.strip()[:12]:
       dd=re.split(r'^([^:]+):(.+)$',d)
       ff.update({'album_artist':dd[2].strip()})
+    if 'artist '==d.strip()[:7]:
+      dd=re.split(r'^([^:]+):(.+)$',d)
+      ff.update({'artist':dd[2].strip()})
     if 'album '==d.strip()[:6]:
       dd=re.split(r'^([^:]+):(.+)$',d)
       ff.update({'album':dd[2].strip()})
@@ -86,9 +89,57 @@ for ff in files:
         ff.update({'compilation':True})
   if not 'compilation' in ff:
     ff.update({'compilation':False})
-#  print(ffprobe_data)
-  print("############################################################################")
+  if not 'title' in ff:
+    ff.update({'title':''})
+  if not 'artist' in ff:
+    ff.update({'artist':''})
+  if not 'album_artist' in ff:
+    ff.update({'album_artist':''})
+  if not 'album' in ff:
+    ff.update({'album':''})
 
+  if not 'track' in ff:
+    ff.update({'track':['0']})
+  if len(ff['track'])<2:
+    ff['track'].extend(['0'])
+
+  if not 'disc' in ff:
+    ff.update({'disc':['0']})
+  if len(ff['disc'])<2:
+    ff['disc'].extend(['0'])
+
+  if len(ff['track'])!=2:
+    raise Exception("Error reading track number {}".format(ff['track']))
+  if len(ff['disc'])!=2:
+    raise Exception("Error reading disc number {}".format(ff['disc']))
+
+# Convert tracks and discs from string to int
+for ff in files:
+  ff['track']=[int(x) for x in ff['track']]
+  ff['disc']=[int(x) for x in ff['disc']]
+
+# Determine destination file name
+for ff in files:
+  artist = ff['album_artist']
+  if artist == '':
+    artist = ff['artist']
+  if artist == '':
+    artist = 'Unknown'
+  
+  album = ff['album']
+  if album == '':
+    album = 'Unknown'
+
+  title = ff['title']
+  if title == '':
+    title = 'Untitled'
+ 
+  if ff['track'][0] > 0:
+    track = '{:02}'.format(ff['track'][0]) 
+  else:
+    track = ''
+
+# Debug
 print(json.dumps(files,indent=2))
 
 
