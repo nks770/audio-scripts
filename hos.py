@@ -191,14 +191,14 @@ for i in range(len(tracks)):
         i,tracks[i]['startPositionInStream']))
 
 # List the tracks
-print("############################################################")
-print("##################### HEARTS OF SPACE ######################")
-print("############################################################")
+print('#'*79)
+print('{0} HEARTS OF SPACE {0}'.format('#'*31))
+print('#'*79)
 print('Program {}: "{}" ({})'.format(pgm,program['title'].title(),program['date']))
 print('Genre: "{}"'.format(program['genres'][0]['name']))
 print('Number of tracks: {}'.format(len(tracks)))
 print('Encoding: {}'.format(encoding))
-print("############################################################")
+print('#'*79)
 max_title=max(len(track['title']) for track in tracks)
 max_artist=max(len(track['artist']) for track in tracks)
 max_tid=math.floor(math.log10(len(tracks)))+1
@@ -212,7 +212,7 @@ for i in range(len(tracks)):
                             tracks[i]['artist'],
                             tracks[i]['title'],
                             datetime.timedelta(seconds=tracks[i]['duration'])))
-print("############################################################")
+print('#'*79)
 print("\n")
 
 cmds = []
