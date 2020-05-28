@@ -218,10 +218,21 @@ print("\n")
 cmds = []
 cmds.extend([['ffmpeg','-i','pgm{}.ts'.format(pgm),'-acodec','pcm_s16le','pgm{}.wav'.format(pgm)]])
 for i in range(len(tracks)):
-  cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),
-    '-af','atrim={}:{}'.format(
-    tracks[i]['startPositionInStream'],
-    tracks[i]['startPositionInStream']+tracks[i]['duration']),wav_format.format(i+1)]])
+  if i==0:
+    cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),
+      '-af','atrim=end={}'.format(
+      tracks[i]['startPositionInStream']+tracks[i]['duration']),
+      wav_format.format(i+1)]])
+  elif i<len(tracks)-1:
+    cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),
+      '-af','atrim={}:{}'.format(
+      tracks[i]['startPositionInStream'],
+      tracks[i]['startPositionInStream']+tracks[i]['duration']),wav_format.format(i+1)]])
+  else:
+    cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),
+      '-af','atrim=start={}'.format(
+      tracks[i]['startPositionInStream']),
+      wav_format.format(i+1)]])
 
 for i in range(len(tracks)):
   if codec=='mp3':
