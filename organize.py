@@ -12,6 +12,7 @@ import math
 import subprocess
 from pathlib import Path
 
+# Define terminal colors
 class bcolors:
   HEADER = '\033[95m'
   OKBLUE = '\033[94m'
@@ -24,7 +25,7 @@ class bcolors:
 
 # Function to clean up file names
 def clean(s):
-  remove_list = [':',';','/','\\','?','"','<','>','|','*','’']
+  remove_list = (':',';','/','\\','?','"','<','>','|','*','’')
   clean_s = s
   for char in remove_list:
     clean_s = clean_s.replace(char,'_')
@@ -40,6 +41,41 @@ def clean_dir(s):
   if clean_s[-1:]=='.':
     clean_s = clean_s[:-1]+'_'
   return clean_s.rstrip()
+
+# Function to parse ffprobe output
+def parse_ffprobe(raw):
+  data=raw.split('\n')
+  metaflag = False
+  metadata = {}
+  for d in data:
+    if d[2:3] != ' ':
+      metaflag = False
+    if metaflag:
+      meta = re.split(r'^([^:]+): (.*)$',d)
+      if len(meta)>2:
+        metadata.update({meta[1].strip(): meta[2].rstrip()})
+    if 'Metadata:' in d:
+      metaflag = True
+  return metadata
+
+# Import metadata parameters to int/boolean data types
+def clean_metadata(x):
+  if x['compilation']=='1':
+    x.update({'compilation':True})
+  else:
+    x.update({'compilation':False})
+
+  for t in ('disc','track'):
+    d=x[t].split('/')
+    try:
+      d1=int(d[0])
+    except:
+      d1=0
+    try:
+      d2=int(d[1])
+    except:
+      d2=0
+    x.update({t:[d1,d2]})
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='Organize music files similar to iTunes.')
@@ -103,70 +139,22 @@ progress='Scanning metadata with ffprobe {:'+str(digits)+'}/{:'+str(digits)+'} -
 
 for ff in files:
   i = i + 1
-  print(progress.format(i,j,i/j), end='\r')
+  print(progress.format(i,j,i/j),ff['name'])
   ffprobe = ['ffprobe', ff['name']]
-  ffprobe_raw = subprocess.run(ffprobe,capture_output=True,text=True).stderr.split('Metadata:')
-  if len(ffprobe_raw)>1:
-    ffprobe_data=ffprobe_raw[1].split('\n')
-  else:
-#    print(ff['name'])
-    ffprobe_data=['']
-  for d in ffprobe_data:
-    if 'album_artist'==d.strip()[:12]:
-      dd=re.split(r'^([^:]+):(.+)$',d)
-      ff.update({'album_artist':dd[2].strip()})
-    if 'artist '==d.strip()[:7]:
-      dd=re.split(r'^([^:]+):(.+)$',d)
-      ff.update({'artist':dd[2].strip()})
-    if 'album '==d.strip()[:6]:
-      dd=re.split(r'^([^:]+):(.+)$',d)
-      ff.update({'album':dd[2].strip()})
-    if 'title'==d.strip()[:5]:
-      dd=re.split(r'^([^:]+):(.+)$',d)
-      ff.update({'title':dd[2].strip()})
-    if 'track '==d.strip()[:6]:
-      dd=re.split(r'^([^:]+):(.+)$',d)
-      ff.update({'track':dd[2].strip().split('/')})
-    if 'disc '==d.strip()[:5]:
-      dd=re.split(r'^([^:]+):(.+)$',d)
-      ff.update({'disc':dd[2].strip().split('/')})
-    if 'compilation'==d.strip()[:11]:
-      dd=re.split(r'^([^:]+):(.+)$',d)
-      if dd[2].strip()=='1':
-        ff.update({'compilation':True})
-  if not 'compilation' in ff:
-    ff.update({'compilation':False})
-  if not 'title' in ff:
-    ff.update({'title':''})
-  if not 'artist' in ff:
-    ff.update({'artist':''})
-  if not 'album_artist' in ff:
-    ff.update({'album_artist':''})
-  if not 'album' in ff:
-    ff.update({'album':''})
+  ffprobe_data = parse_ffprobe(subprocess.run(ffprobe,capture_output=True,text=True,errors='ignore').stderr)
+  print(json.dumps(ffprobe_data,indent=2))
 
-  if not 'track' in ff:
-    ff.update({'track':['0']})
-  if len(ff['track'])<2:
-    ff['track'].extend(['0'])
+  for tag in ('album_artist','artist','album','title','disc','track','compilation'):
+    if tag in ffprobe_data:
+      ff.update({tag: ffprobe_data[tag]})
+    else:
+      ff.update({tag: ''})
+  if 'TPA' in ffprobe_data and ff['disc']=='':
+    ff.update({'disc': ffprobe_data['TPA']})
 
-  if not 'disc' in ff:
-    ff.update({'disc':['0']})
-  if len(ff['disc'])<2:
-    ff['disc'].extend(['0'])
-
-  if len(ff['track'])!=2:
-    raise Exception("Error reading track number {}".format(ff['track']))
-  if len(ff['disc'])!=2:
-    raise Exception("Error reading disc number {}".format(ff['disc']))
-
-# Convert tracks and discs from string to int
-#for ff in files:
-  ff['track']=[int(x) for x in ff['track']]
-  ff['disc']=[int(x) for x in ff['disc']]
+  clean_metadata(ff)
 
 # Determine destination file name
-#for ff in files:
   # Artist
   artist = ff['album_artist']
   if artist == '':
@@ -178,7 +166,7 @@ for ff in files:
   # Album
   album = ff['album']
   if album == '':
-    album = 'Unknown'
+    album = 'Unknown Album'
   # Track Title
   title = ff['title']
   if title == '':
@@ -205,13 +193,13 @@ for ff in files:
   ff.update({'outfile':outfile}) 
 
   # Test
-  if ff['name'] != ff['outfile']:
+  if ff['name'].upper() != ff['outfile'].upper():
     print("\n")
     print("{}ITUNES: {}{}".format(bcolors.FAIL,ff['name'],bcolors.ENDC))
     print("{}PYTHON: {}{}".format(bcolors.FAIL,ff['outfile'],bcolors.ENDC))
     raise Exception(f"{bcolors.FAIL}Conflict error!{bcolors.ENDC}")
-    
-# Debug
-#print(json.dumps(files,indent=2))
+#    
+## Debug
+##print(json.dumps(files,indent=2))
 
 
