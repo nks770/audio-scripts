@@ -26,7 +26,7 @@ class bcolors:
 
 # Function to clean up file names
 def clean(s):
-  remove_list = (':',';','/','\\','?','"','<','>','|','*','’')
+  remove_list = (':',';','/','\\','?','"','<','>','|','*','‘','’')
   clean_s = s
   for char in remove_list:
     clean_s = clean_s.replace(char,'_')
@@ -225,18 +225,24 @@ parser = argparse.ArgumentParser(description='Organize music files similar to iT
 parser.add_argument('source', metavar='source', nargs='*',
                     help='One or more music files that need to be organized.')
 parser.add_argument('destination', metavar='destination', nargs=1,
-                    help='Destination directory where the files will be copied.')
+                    help='Destination directory where the files will be copied [REQUIRED].')
 parser.add_argument('-a','--all', action='store_true', dest='all',
                     help='Operate recursively on all files in the current working directory.')
 parser.add_argument('-t','--test', action='store_true', dest='test',
-                    help='Show how the files will be processed, but do not actually do anything.')
+                    help='Show the constructed mkdir and copy commands, but do not actually do anything.')
+parser.add_argument('-r','--run',action='store_true',dest='run',
+                    help='Actually copy the files.')
+parser.add_argument('-m','--move',action='store_true',dest='move',
+                    help='Move the files instead of copying them (copy is the default).')
+parser.add_argument('-c','--cleanup',action='store_true',dest='clean_empty_dirs',
+                    help='Use "rmdir" to clean up extraneous empty directories.')
 args=parser.parse_args()
 
 destination=args.destination[0]
 
 # The destination directory should already exist
 if not Path(destination).is_dir():
-  if args.test:
+  if not args.run:
     print(f"{bcolors.WARNING}WARNING: Destination directory '{destination}' does not exist!{bcolors.ENDC}")
   else:
     raise Exception(f"{bcolors.FAIL}ERROR: Destination directory '{destination}' does not exist!{bcolors.ENDC}")
@@ -252,7 +258,7 @@ else:
 source.sort()
 
 # Check whether there are any source files to operate on
-if len(source)<1:
+if len(source)<1 and not args.clean_empty_dirs:
   raise Exception(f"{bcolors.FAIL}ERROR: Please specify one or more mp3/m4a files, or use the --all option.{bcolors.ENDC}")
 
 # Validate list of source files and determine whether they are mp3 or m4a
@@ -260,7 +266,7 @@ files = []
 for f in source:
   ff = {'name':f}
   if not Path(f).is_file():
-    if args.test:
+    if not args.run:
       print(f"{bcolors.WARNING}WARNING: Source file '{f}' does not exist!{bcolors.ENDC}")
     else:
       raise Exception(f"{bcolors.FAIL}ERROR: Source file '{f}' does not exist!{bcolors.ENDC}")
@@ -269,7 +275,7 @@ for f in source:
       ff.update({'type':f[-3:]}) 
       files.extend([ff])
     else:
-      if args.test:
+      if not args.run:
         print(f"{bcolors.WARNING}WARNING: Cannot determine type of source file '{f}'!{bcolors.ENDC}")
       else:
         raise Exception(f"{bcolors.FAIL}ERROR: Cannot determine type of source file '{f}'!{bcolors.ENDC}")
@@ -277,12 +283,16 @@ for f in source:
 # Read metadata from source files using ffprobe (part of ffmpeg)
 i = 0
 j = len(files)
-digits=math.floor(math.log10(len(files)))+1
+try:
+  digits=math.floor(math.log10(j))+1
+except:
+  digits=1
 progress='Scanning metadata {:'+str(digits)+'}/{:'+str(digits)+'} -- {:7.2%} ...'
 
 for ff in files:
   i = i + 1
   print(progress.format(i,j,i/j),ff['name'])
+#  print(progress.format(i,j,i/j),end='\r')
 
 ## ffprobe (FFmpeg) method
 #  metadata=standardize(get_metdata_ffprobe(ff['name']))
@@ -296,14 +306,72 @@ for ff in files:
 
   ff.update({'outfile':path_create(ff)}) 
 
-#  print(json.dumps(ff,indent=2))
-
   # Test
 #  if ff['name'].upper() != ff['outfile'].upper():
 #    print("\n")
 #    print("{}ITUNES: {}{}".format(bcolors.FAIL,ff['name'],bcolors.ENDC))
 #    print("{}PYTHON: {}{}".format(bcolors.FAIL,ff['outfile'],bcolors.ENDC))
 #    raise Exception(f"{bcolors.FAIL}Conflict error!{bcolors.ENDC}")
-    
-# Debug
-#print(json.dumps(files,indent=2))
+
+dirs = []
+for ff in files:
+  d = re.split(r'(.*/)(.+)',ff['outfile'])[1][:-1]
+  if d not in dirs:
+    dirs.extend([d])
+
+cmds = []
+for d in dirs:
+  if not Path('{}/{}'.format(destination,d)).is_dir():
+    cmds.extend([['mkdir','-pv','{}/{}'.format(destination,d)]])
+
+for f in files:
+  a=f['name']
+  a2=f'./{a}'
+  b='{}/{}'.format(destination,f['outfile'])
+  if a!=b and a2!=b:
+    if args.move:
+      cmds.extend([['mv','-fv',a,b]])
+    else:
+      cmds.extend([['cp','-afv',a,b]])
+
+# Test run - only show the constructed commands, but don't actually run anything.
+if args.test:
+  for cmd in cmds:
+    print('\033[92m{}\033[0m'.format(cmd))
+
+# Run the full job
+elif args.run:
+
+  # Run each of the constructed commands one by one
+  for cmd in cmds:
+    print('\033[92m{}\033[0m'.format(cmd))
+    subprocess.run(cmd,check=True)
+
+
+# Directory cleanup
+if args.clean_empty_dirs:
+  def contains_files(d):
+    s = [str(x) for x in Path(d).rglob('*') if not x.is_dir()]
+    return len(s)>0
+  
+  empty_dirs = [str(x) for x in Path(destination).rglob('*') if x.is_dir() and not contains_files(x)]
+  empty_dirs.sort(key=lambda x: x.count('/'),reverse=True)
+  
+  cleanup_cmds = []
+  for d in empty_dirs:
+    cleanup_cmds.extend([['rmdir','-v',d]])
+  
+  # Test run
+  if args.test:
+    for cmd in cleanup_cmds:
+      print('\033[92m{}\033[0m'.format(cmd))
+  
+  # Run the full job
+  elif args.run:
+  
+    # Run each of the constructed commands one by one
+    for cmd in cleanup_cmds:
+      print('\033[92m{}\033[0m'.format(cmd))
+      subprocess.run(cmd,check=True)
+
+
