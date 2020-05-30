@@ -154,44 +154,44 @@ def standardize(metadata_raw):
         d=''.join(metadata[m]).split('/')
         try:
           d1=int(d[0])
-        except:
+        except Exception:
           d1=0
         try:
           d2=int(d[1])
-        except:
+        except Exception:
           d2=0
         metadata_s.update({'track':[d1,d2]})
       if m=='trkn':
         d=metadata[m]
         try:
           d1=d[0][0]
-        except:
+        except Exception:
           d1=0
         try:
           d2=d[0][1]
-        except:
+        except Exception:
           d2=0
         metadata_s.update({'track':[d1,d2]})
       if m in ('disc', 'TPOS'):
         d=''.join(metadata[m]).split('/')
         try:
           d1=int(d[0])
-        except:
+        except Exception:
           d1=0
         try:
           d2=int(d[1])
-        except:
+        except Exception:
           d2=0
         metadata_s.update({'disc':[d1,d2]})
       if m=='disk':
         d=metadata[m]
         try:
           d1=d[0][0]
-        except:
+        except Exception:
           d1=0
         try:
           d2=d[0][1]
-        except:
+        except Exception:
           d2=0
         metadata_s.update({'disc':[d1,d2]})
       if m in ('cpil'):
@@ -206,7 +206,7 @@ def standardize(metadata_raw):
           metadata_s.update({'compilation':False})
       if m in ('comment','©cmt','COMM::eng') and ''.join(metadata[m]) != 'Other':
         metadata_s.update({'comment':''.join(metadata[m])})
-  except:
+  except Exception:
     pass
 
   for m in ('artist','album_artist','album','title','genre','encoder','date','comment'):
