@@ -10,6 +10,7 @@ import re
 import json
 import math
 import subprocess
+import mutagen
 from pathlib import Path
 
 # Define terminal colors
@@ -42,40 +43,182 @@ def clean_dir(s):
     clean_s = clean_s[:-1]+'_'
   return clean_s.rstrip()
 
-# Function to parse ffprobe output
-def parse_ffprobe(raw):
-  data=raw.split('\n')
+## Determine destination file name
+def path_create(metadata):
+  # Artist
+  artist = metadata['album_artist']
+  if artist == '':
+    artist = metadata['artist']
+  if metadata['compilation']:
+    artist = 'Compilations'
+  if artist == '':
+    artist = 'Unknown'
+  # Album
+  album = metadata['album']
+  if album == '':
+    album = 'Unknown Album'
+  # Track Title
+  title = metadata['title']
+  if title == '':
+    title = 'Untitled'
+  # Track Number 
+  if metadata['track'][0] > 0:
+    track = '{:02}'.format(metadata['track'][0]) 
+  else:
+    track = ''
+  # Disc Number
+  if metadata['disc'][0] > 0 and metadata['disc'][1] > 1:
+    disc = '{}'.format(metadata['disc'][0])
+  else:
+    disc = ''
+
+  if track!='' and disc!='':
+    filename='{}-{} {}'.format(disc,track,title)
+  elif track!='':
+    filename='{} {}'.format(track,title)
+  else:
+    filename='{}'.format(title)
+  filename=clean(filename[:36])
+  outfile='{}/{}/{}.{}'.format(clean_dir(artist[:40]),clean_dir(album[:40]),filename,metadata['type'])
+  return outfile
+
+# Get metadata using ffprobe method
+def get_metdata_ffprobe(audiofile):
+  ffprobe = ['ffprobe', audiofile]
+  raw_data = subprocess.run(ffprobe,capture_output=True,text=True,errors='ignore').stderr.split('\n')
   metaflag = False
   metadata = {}
-  for d in data:
+  audiotype = ''
+  for d in raw_data:
+    if 'Stream' in d and 'Audio:' in d:
+      meta = re.split(r'^(.*Audio: )(\S+)(.*)$',d)
+      if len(meta)>2:
+        audiotype=meta[2]
     if d[2:3] != ' ':
       metaflag = False
     if metaflag:
       meta = re.split(r'^([^:]+): (.*)$',d)
-      if len(meta)>2:
+      if len(meta)>2 and meta[1].strip() not in metadata.keys():
         metadata.update({meta[1].strip(): meta[2].rstrip()})
     if 'Metadata:' in d:
       metaflag = True
-  return metadata
+  if audiotype=="mp3,":
+    audiotype="mp3"
+  if audiotype=="aac":
+    audiotype="m4a"
+  if audiotype not in ('mp3','m4a'):
+    raise Exception("{}Unrecognized audio file type '{}'.{}".format(bcolors.FAIL,audiotype,bcolors.ENDC))
+  return [audiotype,metadata]
 
-# Import metadata parameters to int/boolean data types
-def clean_metadata(x):
-  if x['compilation']=='1':
-    x.update({'compilation':True})
+# Get metadata using mutagen method
+def get_metdata_mutagen(audiofile):
+  raw_data = mutagen.File(audiofile)
+  if raw_data == None:
+    raise Exception("{}Unable to interpret file {}.{}".format(bcolors.FAIL,audiofile,bcolors.ENDC))
+  audiotype = ''
+  if 'audio/mp1' in raw_data.mime:
+    audiotype='mp3'
+  elif 'audio/mp2' in raw_data.mime:
+    audiotype='mp3'
+  elif 'audio/mp3' in raw_data.mime:
+    audiotype='mp3'
+  elif 'audio/mp4' in raw_data.mime:
+    audiotype='m4a'
   else:
-    x.update({'compilation':False})
+    raise Exception("{}Unrecognized audio type: {}{}".format(bcolors.FAIL,raw_data.mime,bcolors.ENDC))
+  return [audiotype,raw_data.tags]
+  
+# Standardize raw metadata structures
+def standardize(metadata_raw):
+  metadata_s = {'sense_type':metadata_raw[0]}
+  metadata = metadata_raw[1] 
+  try:
+    for m in metadata.keys():
+      if m in ('artist','©ART','TPE1'):
+        metadata_s.update({'artist':''.join(metadata[m])})
+      if m in ('album_artist','aART','TPE2'):
+        metadata_s.update({'album_artist':''.join(metadata[m])})
+      if m in ('album','©alb','TALB'):
+        metadata_s.update({'album':''.join(metadata[m])})
+      if m in ('title','©nam','TIT2'):
+        metadata_s.update({'title':''.join(metadata[m])})
+      if m in ('genre','©gen','TCON'):
+        metadata_s.update({'genre':''.join(metadata[m])})
+      if m in ('encoder','©too','TSSE'):
+        metadata_s.update({'encoder':''.join(metadata[m])})
+      if m in ('date','©day'):
+        metadata_s.update({'date':''.join(metadata[m])})
+      if m in ('TDRC'):
+        metadata_s.update({'date':str(metadata[m])})
+      if m in ('track','TRCK'):
+        d=''.join(metadata[m]).split('/')
+        try:
+          d1=int(d[0])
+        except:
+          d1=0
+        try:
+          d2=int(d[1])
+        except:
+          d2=0
+        metadata_s.update({'track':[d1,d2]})
+      if m=='trkn':
+        d=metadata[m]
+        try:
+          d1=d[0][0]
+        except:
+          d1=0
+        try:
+          d2=d[0][1]
+        except:
+          d2=0
+        metadata_s.update({'track':[d1,d2]})
+      if m in ('disc', 'TPOS'):
+        d=''.join(metadata[m]).split('/')
+        try:
+          d1=int(d[0])
+        except:
+          d1=0
+        try:
+          d2=int(d[1])
+        except:
+          d2=0
+        metadata_s.update({'disc':[d1,d2]})
+      if m=='disk':
+        d=metadata[m]
+        try:
+          d1=d[0][0]
+        except:
+          d1=0
+        try:
+          d2=d[0][1]
+        except:
+          d2=0
+        metadata_s.update({'disc':[d1,d2]})
+      if m in ('cpil'):
+        if metadata[m]:
+          metadata_s.update({'compilation':True})
+        else:
+          metadata_s.update({'compilation':False})
+      if m in ('compilation','TCMP'):
+        if ''.join(metadata[m])=='1':
+          metadata_s.update({'compilation':True})
+        else:
+          metadata_s.update({'compilation':False})
+      if m in ('comment','©cmt','COMM::eng') and ''.join(metadata[m]) != 'Other':
+        metadata_s.update({'comment':''.join(metadata[m])})
+  except:
+    pass
 
-  for t in ('disc','track'):
-    d=x[t].split('/')
-    try:
-      d1=int(d[0])
-    except:
-      d1=0
-    try:
-      d2=int(d[1])
-    except:
-      d2=0
-    x.update({t:[d1,d2]})
+  for m in ('artist','album_artist','album','title','genre','encoder','date','comment'):
+    if m not in metadata_s.keys():
+      metadata_s.update({m:''})
+  for m in ('disc','track'):
+    if m not in metadata_s.keys():
+      metadata_s.update({m:[0,0]})
+  if 'compilation' not in metadata_s.keys():
+    metadata_s.update({'compilation':False})
+  return metadata_s
+
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='Organize music files similar to iTunes.')
@@ -135,71 +278,32 @@ for f in source:
 i = 0
 j = len(files)
 digits=math.floor(math.log10(len(files)))+1
-progress='Scanning metadata with ffprobe {:'+str(digits)+'}/{:'+str(digits)+'} -- {:7.2%} ...'
+progress='Scanning metadata {:'+str(digits)+'}/{:'+str(digits)+'} -- {:7.2%} ...'
 
 for ff in files:
   i = i + 1
   print(progress.format(i,j,i/j),ff['name'])
-  ffprobe = ['ffprobe', ff['name']]
-  ffprobe_data = parse_ffprobe(subprocess.run(ffprobe,capture_output=True,text=True,errors='ignore').stderr)
-  print(json.dumps(ffprobe_data,indent=2))
 
-  for tag in ('album_artist','artist','album','title','disc','track','compilation'):
-    if tag in ffprobe_data:
-      ff.update({tag: ffprobe_data[tag]})
-    else:
-      ff.update({tag: ''})
-  if 'TPA' in ffprobe_data and ff['disc']=='':
-    ff.update({'disc': ffprobe_data['TPA']})
+## ffprobe (FFmpeg) method
+#  metadata=standardize(get_metdata_ffprobe(ff['name']))
 
-  clean_metadata(ff)
+## Mutagen method
+  metadata=standardize(get_metdata_mutagen(ff['name']))
 
-# Determine destination file name
-  # Artist
-  artist = ff['album_artist']
-  if artist == '':
-    artist = ff['artist']
-  if ff['compilation']:
-    artist = 'Compilations'
-  if artist == '':
-    artist = 'Unknown'
-  # Album
-  album = ff['album']
-  if album == '':
-    album = 'Unknown Album'
-  # Track Title
-  title = ff['title']
-  if title == '':
-    title = 'Untitled'
-  # Track Number 
-  if ff['track'][0] > 0:
-    track = '{:02}'.format(ff['track'][0]) 
-  else:
-    track = ''
-  # Disc Number
-  if ff['disc'][0] > 0 and ff['disc'][1] > 1:
-    disc = '{}'.format(ff['disc'][0])
-  else:
-    disc = ''
+  ff.update(metadata)
+  if ff['type'] != ff['sense_type']:
+    raise Exception("{}File contents ({}) do not match file extension ({}).{}".format(bcolors.FAIL,ff['sense_type'],ff['type'],bcolors.ENDC))
 
-  if track!='' and disc!='':
-    filename='{}-{} {}'.format(disc,track,title)
-  elif track!='':
-    filename='{} {}'.format(track,title)
-  else:
-    filename='{}'.format(title)
-  filename=clean(filename[:36])
-  outfile='{}/{}/{}.{}'.format(clean_dir(artist[:40]),clean_dir(album[:40]),filename,ff['type'])
-  ff.update({'outfile':outfile}) 
+  ff.update({'outfile':path_create(ff)}) 
+
+#  print(json.dumps(ff,indent=2))
 
   # Test
-  if ff['name'].upper() != ff['outfile'].upper():
-    print("\n")
-    print("{}ITUNES: {}{}".format(bcolors.FAIL,ff['name'],bcolors.ENDC))
-    print("{}PYTHON: {}{}".format(bcolors.FAIL,ff['outfile'],bcolors.ENDC))
-    raise Exception(f"{bcolors.FAIL}Conflict error!{bcolors.ENDC}")
-#    
-## Debug
-##print(json.dumps(files,indent=2))
-
-
+#  if ff['name'].upper() != ff['outfile'].upper():
+#    print("\n")
+#    print("{}ITUNES: {}{}".format(bcolors.FAIL,ff['name'],bcolors.ENDC))
+#    print("{}PYTHON: {}{}".format(bcolors.FAIL,ff['outfile'],bcolors.ENDC))
+#    raise Exception(f"{bcolors.FAIL}Conflict error!{bcolors.ENDC}")
+    
+# Debug
+#print(json.dumps(files,indent=2))
