@@ -1,9 +1,9 @@
 #!/bin/env python3
 
-# hos.py
+# organize.py
 #
-# This script is for processing downloaded stream data for
-# Hearts of Space (https://www.hos.com)
+# This script is for reorganizing and renaming music files
+# with a method that is designed to mimic the way iTunes does it.
 
 import argparse
 import re
