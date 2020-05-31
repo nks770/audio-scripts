@@ -194,6 +194,17 @@ tracks.sort(key=lambda x: x.get('startPositionInStream'))
 for i in range(len(tracks)):
   if i>0:
     if tracks[i]['startPositionInStream'] != ( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ):
+      print(json.dumps(tracks,indent=2))
+      for i in range(len(tracks)):
+        print('{:2}  {:35}  {:4}  {:4}  {:4}  {}  {}  {}'.format(i+1,
+              tracks[i]['title'][:35],
+              tracks[i]['startPositionInStream'],
+              tracks[i]['duration'],
+              tracks[i]['startPositionInStream']+tracks[i]['duration'],
+              datetime.timedelta(seconds=tracks[i]['startPositionInStream']),
+              datetime.timedelta(seconds=tracks[i]['duration']),
+              datetime.timedelta(seconds=(tracks[i]['startPositionInStream']+tracks[i]['duration'])),
+        ))
       raise Exception("Illegal gap in metadata. Track {} ends at {:,} and track {} starts at {:,}.".format(
         i-1,( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ),
         i,tracks[i]['startPositionInStream']))
