@@ -104,14 +104,23 @@ except:
   pgm1='0'
 
 # Alternative method to get the program number, cross check
-jsonfiles = [str(x) for x in list(Path('api.hos.com/api/v1/programs').rglob('*')) if x.is_file()]
-if len(jsonfiles)>1:
-  raise Exception('More than one file found under api.hos.com/api/v1/programs')
-pgm2=int(re.split(r'(.*\/)(\d+)$',jsonfiles[0])[2])
-pgm2='{:04}'.format(pgm2)
+try:
+  jsonfiles = [str(x) for x in list(Path('api.hos.com/api/v1/programs').rglob('*')) if x.is_file()]
+  if len(jsonfiles)>1:
+    raise Exception('More than one file found under api.hos.com/api/v1/programs')
+  pgm2=int(re.split(r'(.*\/)(\d+)$',jsonfiles[0])[2])
+  pgm2='{:04}'.format(pgm2)
+except:
+  pgm2='0'
 if pgm1 != '0' and pgm1 != pgm2:
   raise Exception('Conflict in determining the progran number ({} vs {}).'.format(pgm1,pgm2))
 pgm=pgm2
+
+# Check whether a program was successfully loaded
+if int(pgm)<1 or not Path('api.hos.com').is_dir():
+  parser.print_help()
+  print("\nThis directory does not contain a Hearts of Space program.\n")
+  quit(1)
 
 # Read program metadata JSON
 with open('api.hos.com/api/v1/programs/{}'.format(int(pgm)),'r') as f:
