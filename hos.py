@@ -116,6 +116,13 @@ pgm=pgm2
 with open('api.hos.com/api/v1/programs/{}'.format(pgm),'r') as f:
   program = json.load(f)
 
+# Check for some critical requirements for the program metadata
+for x in ('title','date','producer','genres','albums'):
+  if x not in program.keys():
+    raise Exception("Critical key '{}' is missing from the program metadata.".format(x))
+  if len(program[x])<2:
+    raise Exception("Unusually short value of '{}' = {}.".format(x,program[x]))
+
 # Read program master M3U playlist
 with open('api.hos.com/vo-intro/pgm{}.m3u8'.format(pgm),'r') as f:
   for x in f:
@@ -246,7 +253,8 @@ for i in range(len(tracks)):
                  '--tl','HoS {}: {}'.format(pgm,program['title'].title()),
                  '--tv','TPE2=Hearts of Space','--ty',program['date'][:4],
                  '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
-                 '--tv','TCON={}'.format(program['genres'][0]['name']),'--tv','TCMP=1',
+                 '--tv','TCON={}'.format(program['genres'][0]['name']),
+#                 '--tv','TCMP=1',
                  '--tc','Produced by {}'.format(program['producer']),
                  '--ti','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])])
     cmds.extend([lame])
@@ -261,7 +269,8 @@ for i in range(len(tracks)):
              '-album','HoS {}: {}'.format(pgm,program['title'].title()),
              '-albumartist','Hearts of Space','-year',program['date'][:4],
              '-track',str(i+1),'-tracks',str(len(tracks)),'-disk','1','-disks','1',
-             '-genre',program['genres'][0]['name'],'-compilation','1',
+             '-genre',program['genres'][0]['name'],
+#             '-compilation','1',
              '-comment','Produced by {}'.format(program['producer']),
              '-tool','Fraunhofer FDK AAC {}'.format(libfdk_aac_version)]
     mp4art=['mp4art','-z','--add','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])]
