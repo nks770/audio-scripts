@@ -53,7 +53,7 @@ function show_help() {
   echo
   echo "  Options:"
   echo "    -i         : Interactive mode; do a serial foreground job instead of qsub."
-  echo "    -l         : Log directory for qsub jobs (default: ~)"
+  echo "    -l logdir  : Log directory for qsub jobs (default: ~)"
   echo "    -c codec   : Specify mp3 or aac; option passed through to hos.py"
   echo "    -b bitrate : Specify encoding bitrate; option passed through to hos.py"
   echo
