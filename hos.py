@@ -107,13 +107,14 @@ except:
 jsonfiles = [str(x) for x in list(Path('api.hos.com/api/v1/programs').rglob('*')) if x.is_file()]
 if len(jsonfiles)>1:
   raise Exception('More than one file found under api.hos.com/api/v1/programs')
-pgm2=re.split(r'(.*\/)(\d+)$',jsonfiles[0])[2]
+pgm2=int(re.split(r'(.*\/)(\d+)$',jsonfiles[0])[2])
+pgm2='{:04}'.format(pgm2)
 if pgm1 != '0' and pgm1 != pgm2:
   raise Exception('Conflict in determining the progran number ({} vs {}).'.format(pgm1,pgm2))
 pgm=pgm2
 
 # Read program metadata JSON
-with open('api.hos.com/api/v1/programs/{}'.format(pgm),'r') as f:
+with open('api.hos.com/api/v1/programs/{}'.format(int(pgm)),'r') as f:
   program = json.load(f)
 
 # Check for some critical requirements for the program metadata
@@ -167,7 +168,7 @@ images_repo_chk = []
 for r in (80, 150):
   images_repo_chk.extend(['api.hos.com/api/v1/images-repo/albums/w/{}/{}.jpg'.format(r,x) for x in album_ids])
 for r in (180, 550, 1024):
-  images_repo_chk.extend(['api.hos.com/api/v1/images-repo/programs/w/{}/{}.jpg'.format(r,pgm)])
+  images_repo_chk.extend(['api.hos.com/api/v1/images-repo/programs/w/{}/{}.jpg'.format(r,int(pgm))])
 
 for x in images_repo_chk:
   if not x in images_repo:
