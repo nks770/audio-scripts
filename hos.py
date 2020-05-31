@@ -189,8 +189,18 @@ for track in tracks:
   track.update({'artist':' & '.join([artist['name'] for artist in track['artists']]).title()})
 
 # Ensure tracks are sorted by startPositionInStream
-# Check to make sure there are no gaps unaccounted for
 tracks.sort(key=lambda x: x.get('startPositionInStream'))
+
+# Remove duplicate track listings - for example, track 14 in program 0785
+i=1
+while i<len(tracks):
+  if (tracks[i]['startPositionInStream'] == tracks[i-1]['startPositionInStream']
+      and tracks[i]['duration'] == tracks[i-1]['duration']
+      and tracks[i]['title'] == tracks[i-1]['title']):
+    tracks.pop(i)
+  i=i+1
+
+# Check to make sure there are no gaps unaccounted for
 for i in range(len(tracks)):
   if i>0:
     if tracks[i]['startPositionInStream'] != ( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ):
