@@ -174,7 +174,8 @@ fi
 # Loop through the ZIP files
 for zip in ${zips} ; do
 
-  zipd=${zip%.*}
+  zipd=${zip%.*}   # Strip off the file extension (.zip)
+  zipd=${zipd##*/} # Strip off any prepended path (everything before the last "/" occurrence)
   if [ "${interactive}" == "true" ] ; then
     echo "Processing ${zipd}..."
     temp=$(mktemp -d)
