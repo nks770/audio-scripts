@@ -171,6 +171,11 @@ if [ ! -d "${dest}" ] ; then
 fi
 
 
+# Get real paths of directories
+dest=$(realpath "${dest}")
+logdir=$(realpath "${logdir}")
+
+
 # Loop through the ZIP files
 for zip in ${zips} ; do
 
