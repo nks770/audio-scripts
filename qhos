@@ -56,6 +56,7 @@ function show_help() {
   echo "    -l logdir  : Log directory for qsub jobs (default: ~)"
   echo "    -c codec   : Specify mp3 or aac; option passed through to hos.py"
   echo "    -b bitrate : Specify encoding bitrate; option passed through to hos.py"
+  echo "    -v setting : Voiceover setting; option passed through to hos.py"
   echo
 }
 
@@ -65,10 +66,12 @@ if [ -z "${1}" ] ; then
   exit 0
 fi
 
-# Parse command line arguments
+# Set option defaults
 interactive="false"
 logdir="~"
+vo="intro"
 
+# Parse command line arguments
 while [ ! -z "${1}" ] ; do
 
   if [ "${1}" == "-i" ] ; then
@@ -116,6 +119,25 @@ while [ ! -z "${1}" ] ; do
       show_help
       exit 1
     fi
+
+  elif [ "${1}" == "-v" ] ; then
+
+    shift
+    vo="${1}"
+    if [ -z "${vo}" ] ; then
+      echo -e "${RED}ERROR: -v option detected, but no value for VOICEOVER SETTING given.${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    if [ "${vo}" != "intro" ] && [ "${vo}" != "on" ] && [ "${vo}" != "off" ]  ; then
+      echo -e "${RED}ERROR: -v option detected, but ${vo} is not a voiceover setting."
+      echo -e "             Please choose one of [ intro, on, off ].${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    vo_opt="-v ${vo}"
 
   elif [ -f "${1}" ] ; then
 
@@ -189,7 +211,7 @@ for zip in ${zips} ; do
       error
     fi
     pushd ${temp}/${zipd}
-    hos.py ${codec} ${bitrate} -r
+    hos.py ${codec} ${bitrate} ${vo_opt} -r
     if [ ! $? -eq 0 ] ; then
       error
     fi
@@ -208,23 +230,24 @@ cat << eof > ${script}
 #!/bin/bash
 
 #PBS -j oe
-#PBS -o "${logdir}/${zipd}.log"
+#PBS -o "${logdir}/${zipd}_${vo}.log"
 #PBS -l nodes=1:ppn=1
-#PBS -N ${zipd}
+#PBS -N ${zipd}_${vo}
 
 module load audio-scripts
+cd \${PBS_O_WORKDIR}
 
 if [ ! -d "\${TMPDIR}" ] ; then
   TMPDIR=/tmp
 fi
 
 temp=\$(mktemp -d -p \${TMPDIR})
-unzip \${PBS_O_WORKDIR}/${zip} -d \${temp}
+unzip ${zip} -d \${temp}
 if [ ! \$? -eq 0 ] ; then
   exit 4
 fi
 pushd \${temp}/${zipd}
-hos.py ${codec} ${bitrate} -r
+hos.py ${codec} ${bitrate} ${vo_opt} -r
 if [ ! \$? -eq 0 ] ; then
   exit 4
 fi

@@ -13,8 +13,23 @@ import math
 import subprocess
 from pathlib import Path
 
+# Control parameters
+vo_label = {'intro': 'Hearts of Space [Voiceover Intro]',
+               'on': 'Hearts of Space',
+              'off': 'Hearts of Space [No Voiceover]'}
+vo_type  = {'intro': 'Intro Only',
+               'on': 'On',
+              'off': 'Off'}
+vo_list = vo_label.keys()
+
+mp3_cbr_bitrates = ['32', '40', '48', '56', '64', '80', '96', '112', '128', '160', '192', '224', '256', '320']
+aac_vbr_bitrates = ['1', '2', '3', '4', '5']
+
 # Parse arguments
 parser = argparse.ArgumentParser(description='Process a Hearts of Space audio stream.')
+parser.add_argument('-v','--voiceover',metavar='SETTING',dest='voiceover',
+                    default='intro',choices=vo_list,
+                    help='Voiceover setting. (Default: intro)')
 parser.add_argument('-c','--codec',metavar='CODEC',dest='codec',
                     default='mp3',choices={'mp3','aac'},
                     help='Output codec to use for transcoding. (Default: mp3)')
@@ -27,8 +42,6 @@ parser.add_argument('-t','--test',action='store_true',dest='test',
 args=parser.parse_args()
 
 # Validate requested bitrate
-mp3_cbr_bitrates = ['32', '40', '48', '56', '64', '80', '96', '112', '128', '160', '192', '224', '256', '320']
-aac_vbr_bitrates = ['1', '2', '3', '4', '5']
 codec = args.codec
 
 if args.bitrate == None and codec == 'mp3':
@@ -104,10 +117,10 @@ except:
   pgm1='0'
 
 # Alternative method to get the program number, cross check
+jsonfiles = [str(x) for x in list(Path('api.hos.com/api/v1/programs').rglob('*')) if x.is_file()]
+if len(jsonfiles)>1:
+  raise Exception('More than one file found under api.hos.com/api/v1/programs')
 try:
-  jsonfiles = [str(x) for x in list(Path('api.hos.com/api/v1/programs').rglob('*')) if x.is_file()]
-  if len(jsonfiles)>1:
-    raise Exception('More than one file found under api.hos.com/api/v1/programs')
   pgm2=int(re.split(r'(.*\/)(\d+)$',jsonfiles[0])[2])
   pgm2='{:04}'.format(pgm2)
 except:
@@ -133,38 +146,45 @@ for x in ('title','date','producer','genres','albums'):
   if len(program[x])<2:
     raise Exception("Unusually short value of '{}' = {}.".format(x,program[x]))
 
-# Read program master M3U playlist
-with open('api.hos.com/vo-intro/pgm{}.m3u8'.format(pgm),'r') as f:
-  for x in f:
-    if "256k" in x:
-      m3u_url=x.rstrip()
+# Check TS files for all the voiceover types
+m3u8 = {}
+for vo_setting in vo_list:
 
-# Read 256k M3U playlist
-m3u = []
-with open('api.hos.com/vo-intro/{}'.format(m3u_url),'r') as f:
-  for x in f:
-    if '.ts' in x:
-      m3u.extend([x.rstrip()])
+  # Read program master M3U playlist for this voiceover type
+  with open('api.hos.com/vo-{}/pgm{}.m3u8'.format(vo_setting,pgm),'r') as f:
+    for x in f:
+      if "256k" in x:
+        m3u_url=x.rstrip()
 
-# Validate to make sure no TS files are missing from the sequence
-# This should never happen, but just want to make sure
-for i in range(0,len(m3u)):
-  if "s{:05}.ts".format(i) != m3u[i]:
-    raise Exception("File s{:05}.ts is missing from the playlist sequence.".format(i))
+  # Read 256k M3U playlist for this voiceover type
+  m3u = []
+  with open('api.hos.com/vo-{}/{}'.format(vo_setting,m3u_url),'r') as f:
+    for x in f:
+      if '.ts' in x:
+        m3u.extend([x.rstrip()])
 
-# Check to make sure we have all the TS files.
-vo_intro = [str(x) for x in list(Path('api.hos.com/vo-intro').rglob('*')) if x.is_file()]
+  # Validate to make sure no TS files are missing from the sequence
+  # This should never happen, but just want to make sure
+  for i in range(0,len(m3u)):
+    if "s{:05}.ts".format(i) != m3u[i]:
+      raise Exception("File s{:05}.ts is missing from the playlist sequence.".format(i))
 
-vo_intro_chk = ['api.hos.com/vo-intro/pgm{}.m3u8'.format(pgm),
-                'api.hos.com/vo-intro/{}'.format(m3u_url)]
-vo_intro_chk.extend(['api.hos.com/vo-intro/pgm{}/256k/{}'.format(pgm,ts) for ts in m3u])
+  # Check to make sure we have all the TS files.
+  vv = [str(x) for x in list(Path('api.hos.com/vo-{}'.format(vo_setting)).rglob('*')) if x.is_file()]
+  
+  vv_chk = ['api.hos.com/vo-{}/pgm{}.m3u8'.format(vo_setting,pgm),
+                  'api.hos.com/vo-{}/{}'.format(vo_setting,m3u_url)]
+  vv_chk.extend(['api.hos.com/vo-{}/pgm{}/256k/{}'.format(vo_setting,pgm,ts) for ts in m3u])
 
-for x in vo_intro_chk:
-  if not x in vo_intro:
-    raise Exception("{} is missing.".format(x))
-for x in vo_intro:
-  if not x in vo_intro_chk:
-    print("WARNING: Extra file {} is not needed.".format(x))
+  for x in vv_chk:
+    if not x in vv:
+      raise Exception("{} is missing.".format(x))
+  for x in vv:
+    if not x in vv_chk:
+      print("WARNING: Extra file {} is not needed.".format(x))
+
+  # Add this playlist to the dict
+  m3u8.update({vo_setting:m3u})
 
 # Get Album IDs
 album_ids = {album['id'] for album in program['albums']}
@@ -233,6 +253,7 @@ print('#'*79)
 print('{0} HEARTS OF SPACE {0}'.format('#'*31))
 print('#'*79)
 print('Program {}: "{}" ({})'.format(pgm,program['title'].title(),program['date']))
+print('Voiceover Setting: {} ({})'.format(vo_type[args.voiceover],args.voiceover))
 print('Genre: "{}"'.format(program['genres'][0]['name']))
 print('Number of tracks: {}'.format(len(tracks)))
 print('Encoding: {}'.format(encoding))
@@ -282,7 +303,8 @@ for i in range(len(tracks)):
     lame.extend(['-q','0',wav_format.format(i+1),mp3_format.format(i+1),
                  '--id3v2-only','--tt',tracks[i]['title'],'--ta',tracks[i]['artist'],
                  '--tl','HoS {}: {}'.format(pgm,program['title'].title()),
-                 '--tv','TPE2=Hearts of Space','--ty',program['date'][:4],
+                 '--tv','TPE2={}'.format(vo_label[args.voiceover]),
+                 '--ty',program['date'][:4],
                  '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
                  '--tv','TCON={}'.format(program['genres'][0]['name']),
 #                 '--tv','TCMP=1',
@@ -298,7 +320,8 @@ for i in range(len(tracks)):
     ffmpeg.extend(['-f','mp4',m4a_format.format(i+1)])
     mp4tags=['mp4tags','-song',tracks[i]['title'],'-artist',tracks[i]['artist'],
              '-album','HoS {}: {}'.format(pgm,program['title'].title()),
-             '-albumartist','Hearts of Space','-year',program['date'][:4],
+             '-albumartist',vo_label[args.voiceover],
+             '-year',program['date'][:4],
              '-track',str(i+1),'-tracks',str(len(tracks)),'-disk','1','-disks','1',
              '-genre',program['genres'][0]['name'],
 #             '-compilation','1',
@@ -319,8 +342,8 @@ elif args.run:
 
   # Concatenate all the TS files together into one
   with open('pgm{}.ts'.format(pgm),'wb') as out:
-    for ts in m3u:
-      with open('api.hos.com/vo-intro/pgm{}/256k/{}'.format(pgm,ts),'rb') as inp:
+    for ts in m3u8[args.voiceover]:
+      with open('api.hos.com/vo-{}/pgm{}/256k/{}'.format(args.voiceover,pgm,ts),'rb') as inp:
         out.write(inp.read())
 
   # Run each of the constructed commands one by one
