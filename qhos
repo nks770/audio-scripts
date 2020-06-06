@@ -68,7 +68,7 @@ fi
 
 # Set option defaults
 interactive="false"
-logdir="~"
+logdir="${HOME}"
 vo="intro"
 
 # Parse command line arguments
@@ -130,14 +130,18 @@ while [ ! -z "${1}" ] ; do
       show_help
       exit 1
     fi
-    if [ "${vo}" != "intro" ] && [ "${vo}" != "on" ] && [ "${vo}" != "off" ]  ; then
+    if [ "${vo}" != "intro" ] && [ "${vo}" != "on" ] && [ "${vo}" != "off" ] && [ "${vo}" != "all" ]  ; then
       echo -e "${RED}ERROR: -v option detected, but ${vo} is not a voiceover setting."
-      echo -e "             Please choose one of [ intro, on, off ].${WHITE}"
+      echo -e "             Please choose one of [ intro, on, off, all ].${WHITE}"
       echo
       show_help
       exit 1
     fi
-    vo_opt="-v ${vo}"
+    if [ "${vo}" == "all" ] ; then
+      vo_loop="intro off on"
+    else
+      vo_loop="${vo}"
+    fi
 
   elif [ -f "${1}" ] ; then
 
@@ -194,8 +198,27 @@ fi
 
 
 # Get real paths of directories
-dest=$(realpath "${dest}")
-logdir=$(realpath "${logdir}")
+#dest=$(realpath "${dest}")
+pushd "${dest}" >/dev/null
+if [ ! $? -eq 0 ] ; then
+  echo -e "${RED}ERROR: Could not cd to directory \"${dest}\".${WHITE}"
+  echo
+  show_help
+  exit 1
+fi
+dest="$(pwd)"
+popd >/dev/null
+
+#logdir=$(realpath "${logdir}")
+pushd "${logdir}"
+if [ ! $? -eq 0 ] ; then
+  echo -e "${RED}ERROR: Could not cd to directory \"${logdir}\".${WHITE}"
+  echo
+  show_help
+  exit 1
+fi
+logdir="$(pwd)"
+popd > /dev/null
 
 
 # Loop through the ZIP files
@@ -211,14 +234,16 @@ for zip in ${zips} ; do
       error
     fi
     pushd ${temp}/${zipd}
-    hos.py ${codec} ${bitrate} ${vo_opt} -r
-    if [ ! $? -eq 0 ] ; then
-      error
-    fi
-    organize.py -a -m -c -r "${dest}"
-    if [ ! $? -eq 0 ] ; then
-      error
-    fi
+    for vo_opt in ${vo_loop} ; do
+      hos.py ${codec} ${bitrate} -v ${vo_opt} -r
+      if [ ! $? -eq 0 ] ; then
+        error
+      fi
+      organize.py -a -m -c -r "${dest}"
+      if [ ! $? -eq 0 ] ; then
+        error
+      fi
+    done
     popd
     rm -rfv ${temp}
   else
@@ -247,14 +272,18 @@ if [ ! \$? -eq 0 ] ; then
   exit 4
 fi
 pushd \${temp}/${zipd}
-hos.py ${codec} ${bitrate} ${vo_opt} -r
-if [ ! \$? -eq 0 ] ; then
-  exit 4
-fi
-organize.py -a -m -c -r "${dest}"
-if [ ! \$? -eq 0 ] ; then
-  exit 4
-fi
+eof
+for vo_opt in ${vo_loop} ; do
+  echo "hos.py ${codec} ${bitrate} -v ${vo_opt} -r">>${script}
+  echo "if [ ! \$? -eq 0 ] ; then">>${script}
+  echo "  exit 4">>${script}
+  echo "fi">>${script}
+  echo "organize.py -a -m -c -r \"${dest}\"">>${script}
+  echo "if [ ! \$? -eq 0 ] ; then">>${script}
+  echo "  exit 4">>${script}
+  echo "fi">>${script}
+done
+cat << eof >> ${script}
 popd
 rm -rfv \${temp}
 eof
