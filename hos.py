@@ -143,7 +143,11 @@ with open('api.hos.com/api/v1/programs/{}'.format(int(pgm)),'r') as f:
 for x in ('title','date','producer','genres','albums'):
   if x not in program.keys():
     raise Exception("Critical key '{}' is missing from the program metadata.".format(x))
-  if len(program[x])<2:
+for x in ('title','date','producer'):
+  if len(program[x])<4:
+    raise Exception("Unusually short value of '{}' = {}.".format(x,program[x]))
+for x in ('genres','albums'):
+  if len(program[x])<1:
     raise Exception("Unusually short value of '{}' = {}.".format(x,program[x]))
 
 # Check TS files for all the voiceover types
@@ -277,7 +281,12 @@ print("\n")
 cmds = []
 cmds.extend([['ffmpeg','-i','pgm{}.ts'.format(pgm),'-acodec','pcm_s16le','pgm{}.wav'.format(pgm)]])
 for i in range(len(tracks)):
-  if i==0:
+  if i==0 and len(tracks)==1:
+    # Support for HoS programs with only one grack - for example, program 1212
+    # Could use ffmpeg with no atrim filter, but maybe faster to just use cp
+    # cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),wav_format.format(i+1)]])
+    cmds.extend([['cp','-av','pgm{}.wav'.format(pgm),wav_format.format(i+1)]])
+  elif i==0:
     cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),
       '-af','atrim=end={}'.format(
       tracks[i]['startPositionInStream']+tracks[i]['duration']),
