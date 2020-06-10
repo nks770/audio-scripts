@@ -129,18 +129,12 @@ while [ ! -z "${1}" ] ; do
       echo
       show_help
       exit 1
-    fi
-    if [ "${vo}" != "intro" ] && [ "${vo}" != "on" ] && [ "${vo}" != "off" ] && [ "${vo}" != "all" ]  ; then
+    elif [ "${vo}" != "intro" ] && [ "${vo}" != "on" ] && [ "${vo}" != "off" ] && [ "${vo}" != "all" ]  ; then
       echo -e "${RED}ERROR: -v option detected, but ${vo} is not a voiceover setting."
       echo -e "             Please choose one of [ intro, on, off, all ].${WHITE}"
       echo
       show_help
       exit 1
-    fi
-    if [ "${vo}" == "all" ] ; then
-      vo_loop="intro off on"
-    else
-      vo_loop="${vo}"
     fi
 
   elif [ -f "${1}" ] ; then
@@ -180,6 +174,14 @@ while [ ! -z "${1}" ] ; do
   fi
 shift
 done
+
+
+# Clean up voiceover setting
+if [ "${vo}" == "all" ] ; then
+  vo_loop="intro off on"
+else
+  vo_loop="${vo}"
+fi
 
 
 # Check if everything is all set to continue
