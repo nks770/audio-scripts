@@ -13,6 +13,17 @@ import math
 import subprocess
 from pathlib import Path
 
+# Define terminal colors
+class bcolors:
+  HEADER = '\033[95m'
+  OKBLUE = '\033[94m'
+  OKGREEN = '\033[92m'
+  WARNING = '\033[93m'
+  FAIL = '\033[91m'
+  ENDC = '\033[0m'
+  BOLD = '\033[1m'
+  UNDERLINE = '\033[4m'
+
 # Control parameters
 vo_label = {'intro': 'Hearts of Space [Voiceover Intro]',
                'on': 'Hearts of Space',
@@ -169,9 +180,13 @@ for vo_setting in vo_list:
 
   # Validate to make sure no TS files are missing from the sequence
   # This should never happen, but just want to make sure
+  # Added support for HoS programs with non-standard ts filenames (without the 's') - for example, program 1180
   for i in range(0,len(m3u)):
-    if "s{:05}.ts".format(i) != m3u[i]:
-      raise Exception("File s{:05}.ts is missing from the playlist sequence.".format(i))
+    if "s{:05}.ts".format(i) != m3u[i] and "{:05}.ts".format(i) != m3u[i]:
+      if m3u[i][0]=="s":
+        raise Exception("{}ERROR: File s{:05}.ts is missing from the playlist sequence.{}".format(bcolors.FAIL,i,bcolors.ENDC))
+      else:
+        raise Exception("{}ERROR: File {:05}.ts is missing from the playlist sequence.{}".format(bcolors.FAIL,i,bcolors.ENDC))
 
   # Check to make sure we have all the TS files.
   vv = [str(x) for x in list(Path('api.hos.com/vo-{}'.format(vo_setting)).rglob('*')) if x.is_file()]
@@ -182,10 +197,10 @@ for vo_setting in vo_list:
 
   for x in vv_chk:
     if not x in vv:
-      raise Exception("{} is missing.".format(x))
+      raise Exception("{}ERROR: {} is missing.{}".format(bcolors.FAIL,x,bcolors.ENDC))
   for x in vv:
     if not x in vv_chk:
-      print("WARNING: Extra file {} is not needed.".format(x))
+      print("{}WARNING: Extra file {} is not needed.{}".format(bcolors.WARNING,x,bcolors.ENDC))
 
   # Add this playlist to the dict
   m3u8.update({vo_setting:m3u})
@@ -205,10 +220,10 @@ for r in (180, 550, 1024):
 
 for x in images_repo_chk:
   if not x in images_repo:
-    raise Exception("{} is missing.".format(x))
+    raise Exception("{}ERROR: {} is missing.{}".format(bcolors.FAIL,x,bcolors.ENDC))
 for x in images_repo:
   if not x in images_repo_chk:
-    print("WARNING: Extra file {} is not needed.".format(x))
+    print("{}WARNING: Extra file {} is not needed.{}".format(bcolors.WARNING,x,bcolors.ENDC))
 
 # Extract track list, preserve album ID from parent object
 tracks = []
@@ -282,7 +297,7 @@ cmds = []
 cmds.extend([['ffmpeg','-i','pgm{}.ts'.format(pgm),'-acodec','pcm_s16le','pgm{}.wav'.format(pgm)]])
 for i in range(len(tracks)):
   if i==0 and len(tracks)==1:
-    # Support for HoS programs with only one grack - for example, program 1212
+    # Support for HoS programs with only one track - for example, program 1212
     # Could use ffmpeg with no atrim filter, but maybe faster to just use cp
     # cmds.extend([['ffmpeg','-i','pgm{}.wav'.format(pgm),wav_format.format(i+1)]])
     cmds.extend([['cp','-av','pgm{}.wav'.format(pgm),wav_format.format(i+1)]])
