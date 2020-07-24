@@ -163,6 +163,7 @@ for x in ('genres','albums'):
 
 # Check TS files for all the voiceover types
 m3u8 = {}
+tsdir = {}
 for vo_setting in vo_list:
 
   # Read program master M3U playlist for this voiceover type
@@ -177,6 +178,9 @@ for vo_setting in vo_list:
     for x in f:
       if '.ts' in x:
         m3u.extend([x.rstrip()])
+
+  # Get the directory where the TS files are located
+  tsd = re.split(r'^(.+)\/(.*)$',m3u_url)[1]
 
   # Validate to make sure no TS files are missing from the sequence
   # This should never happen, but just want to make sure
@@ -193,7 +197,7 @@ for vo_setting in vo_list:
   
   vv_chk = ['api.hos.com/vo-{}/pgm{}.m3u8'.format(vo_setting,pgm),
                   'api.hos.com/vo-{}/{}'.format(vo_setting,m3u_url)]
-  vv_chk.extend(['api.hos.com/vo-{}/pgm{}/256k/{}'.format(vo_setting,pgm,ts) for ts in m3u])
+  vv_chk.extend(['api.hos.com/vo-{}/{}/{}'.format(vo_setting,tsd,ts) for ts in m3u])
 
   for x in vv_chk:
     if not x in vv:
@@ -204,6 +208,7 @@ for vo_setting in vo_list:
 
   # Add this playlist to the dict
   m3u8.update({vo_setting:m3u})
+  tsdir.update({vo_setting:tsd})
 
 # Get Album IDs
 album_ids = {album['id'] for album in program['albums']}
@@ -367,7 +372,7 @@ elif args.run:
   # Concatenate all the TS files together into one
   with open('pgm{}.ts'.format(pgm),'wb') as out:
     for ts in m3u8[args.voiceover]:
-      with open('api.hos.com/vo-{}/pgm{}/256k/{}'.format(args.voiceover,pgm,ts),'rb') as inp:
+      with open('api.hos.com/vo-{}/{}/{}'.format(args.voiceover,tsdir[args.voiceover],ts),'rb') as inp:
         out.write(inp.read())
 
   # Run each of the constructed commands one by one
