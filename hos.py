@@ -258,19 +258,24 @@ for i in range(len(tracks)):
   if i>0:
     if tracks[i]['startPositionInStream'] != ( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ):
       print(json.dumps(tracks,indent=2))
-      for i in range(len(tracks)):
-        print('{:2}  {:35}  {:4}  {:4}  {:4}  {}  {}  {}'.format(i+1,
-              tracks[i]['title'][:35],
-              tracks[i]['startPositionInStream'],
-              tracks[i]['duration'],
-              tracks[i]['startPositionInStream']+tracks[i]['duration'],
-              datetime.timedelta(seconds=tracks[i]['startPositionInStream']),
-              datetime.timedelta(seconds=tracks[i]['duration']),
-              datetime.timedelta(seconds=(tracks[i]['startPositionInStream']+tracks[i]['duration'])),
+      for j in range(len(tracks)):
+        print('{}{:2}  {:35}  {:4}  {:4}  {:4}  {}  {}  {}{}'.format(
+              bcolors.WARNING if (i==j or i==(j+1)) else bcolors.ENDC,
+              j+1,
+              tracks[j]['title'][:35],
+              tracks[j]['startPositionInStream'],
+              tracks[j]['duration'],
+              tracks[j]['startPositionInStream']+tracks[j]['duration'],
+              datetime.timedelta(seconds=tracks[j]['startPositionInStream']),
+              datetime.timedelta(seconds=tracks[j]['duration']),
+              datetime.timedelta(seconds=(tracks[j]['startPositionInStream']+tracks[j]['duration'])),
+              bcolors.ENDC
         ))
-      raise Exception("Illegal gap in metadata. Track {} ends at {:,} and track {} starts at {:,}.".format(
-        i-1,( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ),
-        i,tracks[i]['startPositionInStream']))
+      raise Exception("{}Illegal gap in metadata. Track {} ends at {:,} and track {} starts at {:,}.{}".format(
+        bcolors.FAIL,
+        i,( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ),
+        i+1,tracks[i]['startPositionInStream'],
+        bcolors.ENDC))
 
 # List the tracks
 print('#'*79)
@@ -364,7 +369,7 @@ for i in range(len(tracks)):
 # Test run - only show the constructed commands, but don't actually run anything.
 if args.test:
   for cmd in cmds:
-    print('\033[92m{}\033[0m'.format(cmd))
+    print('{}{}{}'.format(bcolors.OKGREEN,cmd,bcolors.ENDC))
 
 # Run the full job
 elif args.run:
@@ -377,7 +382,7 @@ elif args.run:
 
   # Run each of the constructed commands one by one
   for cmd in cmds:
-    print('\033[92m{}\033[0m'.format(cmd))
+    print('{}{}{}'.format(bcolors.OKGREEN,cmd,bcolors.ENDC))
     subprocess.run(cmd,check=True)
 
   # Delete temporary files
