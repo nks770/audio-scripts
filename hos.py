@@ -50,6 +50,8 @@ parser.add_argument('-r','--run',action='store_true',dest='run',
                     help='Actually run the transcode.')
 parser.add_argument('-t','--test',action='store_true',dest='test',
                     help='Only show the constructed commands, do not execute anything.')
+parser.add_argument('-z','--disable-fixes',action='store_true',dest='nofix',
+                    help='Disable automatic fixes for JSON playlist problems.')
 args=parser.parse_args()
 
 # Validate requested bitrate
@@ -244,14 +246,23 @@ for track in tracks:
 # Ensure tracks are sorted by startPositionInStream
 tracks.sort(key=lambda x: x.get('startPositionInStream'))
 
-# Remove duplicate track listings - for example, track 14 in program 0785
-i=1
-while i<len(tracks):
-  if (tracks[i]['startPositionInStream'] == tracks[i-1]['startPositionInStream']
-      and tracks[i]['duration'] == tracks[i-1]['duration']
-      and tracks[i]['title'] == tracks[i-1]['title']):
-    tracks.pop(i)
-  i=i+1
+# Remove duplicate track listings
+if not args.nofix:
+  i=1
+  while i<len(tracks):
+    # When the two tracks are exact duplicates, for example, track 14 in program 0785
+    if (tracks[i]['startPositionInStream'] == tracks[i-1]['startPositionInStream']
+        and tracks[i]['duration'] == tracks[i-1]['duration']
+        and tracks[i]['title'] == tracks[i-1]['title']):
+      print("{}WARNING: Removing duplicate track {}.{}".format(bcolors.WARNING,i,bcolors.ENDC))
+      tracks.pop(i)
+    # When the two tracks are not quite duplicates, for example, track 5 in program 0604
+    if (tracks[i]['startPositionInStream'] == tracks[i-1]['startPositionInStream']
+        and tracks[i-1]['startPositionInStream']+tracks[i-1]['duration'] == tracks[i+1]['startPositionInStream']
+        and tracks[i]['title'] == tracks[i-1]['title']):
+      print("{}WARNING: Removing duplicate track {}.{}".format(bcolors.WARNING,i,bcolors.ENDC))
+      tracks.pop(i)
+    i=i+1
 
 # Check to make sure there are no gaps unaccounted for
 for i in range(len(tracks)):
