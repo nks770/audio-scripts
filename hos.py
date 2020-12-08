@@ -157,7 +157,7 @@ for x in ('title','date','producer','genres','albums'):
   if x not in program.keys():
     raise Exception("Critical key '{}' is missing from the program metadata.".format(x))
 for x in ('title','date','producer'):
-  if len(program[x])<4:
+  if len(program[x])<3:
     raise Exception("Unusually short value of '{}' = {}.".format(x,program[x]))
 for x in ('genres','albums'):
   if len(program[x])<1:
