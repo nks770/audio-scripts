@@ -272,6 +272,13 @@ if not args.nofix:
         else:
           print("{}WARNING: Removing extra track {} ({} / {}).{}".format(bcolors.WARNING,i+1,tracks[i]['artist'],tracks[i]['title'],bcolors.ENDC))
         tracks.pop(i)
+    if tracks[i]['startPositionInStream'] > ( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ):
+      print("{}WARNING: Inserting untitled track {}.{}".format(bcolors.WARNING,i+1,bcolors.ENDC))
+      tracks.insert(i,{'startPositionInStream':tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'],
+                       'duration':tracks[i]['startPositionInStream'] - tracks[i-1]['startPositionInStream'] - tracks[i-1]['duration'],
+                       'title':'Untitled',
+                       'artist':'Unknown Artist',
+                       'album_id':-1})
     i=i+1
 
 # Check to make sure there are no gaps unaccounted for
@@ -363,8 +370,9 @@ for i in range(len(tracks)):
                  '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
                  '--tv','TCON={}'.format(program['genres'][0]['name']),
 #                 '--tv','TCMP=1',
-                 '--tc','Produced by {}'.format(program['producer']),
-                 '--ti','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])])
+                 '--tc','Produced by {}'.format(program['producer'])])
+    if tracks[i]['album_id'] != -1:
+      lame.extend(['--ti','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])])
     cmds.extend([lame])
   if codec=='aac':
     ffmpeg=['ffmpeg','-i',wav_format.format(i+1),'-acodec','libfdk_aac']
@@ -385,7 +393,10 @@ for i in range(len(tracks)):
     mp4art=['mp4art','-z','--add','api.hos.com/api/v1/images-repo/albums/w/150/{}.jpg'.format(tracks[i]['album_id'])]
     mp4tags.extend([m4a_format.format(i+1)])
     mp4art.extend([m4a_format.format(i+1)])
-    cmds.extend([ffmpeg,mp4tags,mp4art])
+    if tracks[i]['album_id'] != -1:
+      cmds.extend([ffmpeg,mp4tags,mp4art])
+    else:
+      cmds.extend([ffmpeg,mp4tags])
 
 # Test run - only show the constructed commands, but don't actually run anything.
 if args.test:
