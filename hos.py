@@ -257,7 +257,6 @@ if not args.nofix:
       print("{}WARNING: Removing duplicate track {} ({} / {}).{}".format(bcolors.WARNING,i+1,tracks[i]['artist'],tracks[i]['title'],bcolors.ENDC))
       tracks.pop(i)
     # When the two tracks are not quite duplicates, for example, track 5 in program 0604
-    # Except, compare only the first 9 characters of the track name (problem in program 0298)
     if i==len(tracks)-1: 
       if (tracks[i]['startPositionInStream'] == tracks[i-1]['startPositionInStream']
           and tracks[i]['duration'] == tracks[i-1]['duration']):
@@ -265,9 +264,13 @@ if not args.nofix:
         tracks.pop(i)
     else:
       if (tracks[i]['startPositionInStream'] == tracks[i-1]['startPositionInStream']
-          and tracks[i-1]['startPositionInStream']+tracks[i-1]['duration'] == tracks[i+1]['startPositionInStream']
-          and tracks[i]['title'][:9] == tracks[i-1]['title'][:9]):
-        print("{}WARNING: Removing duplicate track {} ({} / {}).{}".format(bcolors.WARNING,i+1,tracks[i]['artist'],tracks[i]['title'],bcolors.ENDC))
+          and tracks[i-1]['startPositionInStream']+tracks[i-1]['duration'] == tracks[i+1]['startPositionInStream']):
+        # Except, compare only the first 9 characters of the track name (problem in program 0298)
+        if tracks[i]['title'][:9] == tracks[i-1]['title'][:9]:
+          print("{}WARNING: Removing duplicate track {} ({} / {}).{}".format(bcolors.WARNING,i+1,tracks[i]['artist'],tracks[i]['title'],bcolors.ENDC))
+        # Also remove extra tracks that aren't duplicates (like track 13 in program 0490)
+        else:
+          print("{}WARNING: Removing extra track {} ({} / {}).{}".format(bcolors.WARNING,i+1,tracks[i]['artist'],tracks[i]['title'],bcolors.ENDC))
         tracks.pop(i)
     i=i+1
 
