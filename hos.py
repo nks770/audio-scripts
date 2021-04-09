@@ -246,6 +246,19 @@ for track in tracks:
 # Ensure tracks are sorted by startPositionInStream
 tracks.sort(key=lambda x: x.get('startPositionInStream'))
 
+# If start position of first track is not zero, then fix it
+if tracks[0]['startPositionInStream'] != 0:
+  if len(tracks)==1:
+    print("{}WARNING: Start position of first track is {}; resetting to zero.{}".format(bcolors.WARNING,datetime.timedelta(seconds=tracks[0]['startPositionInStream']),bcolors.ENDC))
+    tracks[0]['startPositionInStream'] = 0
+  else:
+    print("{}WARNING: Inserting untitled track {}.{}".format(bcolors.WARNING,1,bcolors.ENDC))
+    tracks.insert(0,{'startPositionInStream':0,
+                     'duration':tracks[0]['startPositionInStream'],
+                     'title':'Untitled',
+                     'artist':'Unknown Artist',
+                     'album_id':-1})
+
 # Remove duplicate track listings
 if not args.nofix:
   i=1
