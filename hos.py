@@ -163,6 +163,9 @@ for x in ('genres','albums'):
   if len(program[x])<1:
     raise Exception("Unusually short value of '{}' = {}.".format(x,program[x]))
 
+# Fix the program title to be proper case
+program['title'] = program['title'].title().replace("'S ","'s ")
+
 # Check TS files for all the voiceover types
 m3u8 = {}
 tsdir = {}
@@ -246,18 +249,14 @@ for track in tracks:
 # Ensure tracks are sorted by startPositionInStream
 tracks.sort(key=lambda x: x.get('startPositionInStream'))
 
-# If start position of first track is not zero, then fix it
+# If start position of first track is not zero, then insert an untitled track #1
 if tracks[0]['startPositionInStream'] != 0:
-  if len(tracks)==1:
-    print("{}WARNING: Start position of first track is {}; resetting to zero.{}".format(bcolors.WARNING,datetime.timedelta(seconds=tracks[0]['startPositionInStream']),bcolors.ENDC))
-    tracks[0]['startPositionInStream'] = 0
-  else:
-    print("{}WARNING: Inserting untitled track {}.{}".format(bcolors.WARNING,1,bcolors.ENDC))
-    tracks.insert(0,{'startPositionInStream':0,
-                     'duration':tracks[0]['startPositionInStream'],
-                     'title':'Untitled',
-                     'artist':'Unknown Artist',
-                     'album_id':-1})
+  print("{}WARNING: Inserting untitled track {}.{}".format(bcolors.WARNING,1,bcolors.ENDC))
+  tracks.insert(0,{'startPositionInStream':0,
+                   'duration':tracks[0]['startPositionInStream'],
+                   'title':'Untitled',
+                   'artist':'Unknown Artist',
+                   'album_id':-1})
 
 # Remove duplicate track listings
 if not args.nofix:
@@ -322,7 +321,7 @@ for i in range(len(tracks)):
 print('#'*79)
 print('{0} HEARTS OF SPACE {0}'.format('#'*31))
 print('#'*79)
-print('Program {}: "{}" ({})'.format(pgm,program['title'].title(),program['date']))
+print('Program {}: "{}" ({})'.format(pgm,program['title'],program['date']))
 print('Voiceover Setting: {} ({})'.format(vo_type[args.voiceover],args.voiceover))
 print('Genre: "{}"'.format(program['genres'][0]['name']))
 print('Number of tracks: {}'.format(len(tracks)))
@@ -377,7 +376,7 @@ for i in range(len(tracks)):
       lame.extend(['-V',str(mp3_vbr_quality)])
     lame.extend(['-q','0',wav_format.format(i+1),mp3_format.format(i+1),
                  '--id3v2-only','--tt',tracks[i]['title'],'--ta',tracks[i]['artist'],
-                 '--tl','HoS {}: {}'.format(pgm,program['title'].title()),
+                 '--tl','HoS {}: {}'.format(pgm,program['title']),
                  '--tv','TPE2={}'.format(vo_label[args.voiceover]),
                  '--ty',program['date'][:4],
                  '--tn','{}/{}'.format(i+1,len(tracks)),'--tv','TPOS=1/1',
@@ -395,7 +394,7 @@ for i in range(len(tracks)):
       ffmpeg.extend(['-vbr',aac_vbr_quality])
     ffmpeg.extend(['-f','mp4',m4a_format.format(i+1)])
     mp4tags=['mp4tags','-song',tracks[i]['title'],'-artist',tracks[i]['artist'],
-             '-album','HoS {}: {}'.format(pgm,program['title'].title()),
+             '-album','HoS {}: {}'.format(pgm,program['title']),
              '-albumartist',vo_label[args.voiceover],
              '-year',program['date'][:4],
              '-track',str(i+1),'-tracks',str(len(tracks)),'-disk','1','-disks','1',
