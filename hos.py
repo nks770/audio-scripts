@@ -260,6 +260,7 @@ if tracks[0]['startPositionInStream'] != 0:
 
 # Remove duplicate track listings
 if not args.nofix:
+  # Loop 1
   i=1
   while i<len(tracks):
     # When the two tracks are exact duplicates, for example, track 14 in program 0785
@@ -268,6 +269,11 @@ if not args.nofix:
         and tracks[i]['title'] == tracks[i-1]['title']):
       print("{}WARNING: Removing duplicate track {} ({} / {}).{}".format(bcolors.WARNING,i+1,tracks[i]['artist'],tracks[i]['title'],bcolors.ENDC))
       tracks.pop(i)
+    i=i+1
+
+  # Loop 2
+  i=1
+  while i<len(tracks):
     # When the two tracks are not quite duplicates, for example, track 5 in program 0604
     if i==len(tracks)-1: 
       if (tracks[i]['startPositionInStream'] == tracks[i-1]['startPositionInStream']
@@ -284,6 +290,11 @@ if not args.nofix:
         else:
           print("{}WARNING: Removing extra track {} ({} / {}).{}".format(bcolors.WARNING,i+1,tracks[i]['artist'],tracks[i]['title'],bcolors.ENDC))
         tracks.pop(i)
+    i=i+1
+
+  # Loop 3
+  i=1
+  while i<len(tracks):
     if tracks[i]['startPositionInStream'] > ( tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'] ):
       print("{}WARNING: Inserting untitled track {}.{}".format(bcolors.WARNING,i+1,bcolors.ENDC))
       tracks.insert(i,{'startPositionInStream':tracks[i-1]['startPositionInStream'] + tracks[i-1]['duration'],
