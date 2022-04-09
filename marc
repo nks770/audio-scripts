@@ -1,0 +1,24 @@
+#!/bin/bash
+
+for j in ${@} ; do
+  echo ${j}
+  cd ${j}
+
+  if [ -d audio ] ; then
+    zip -v -r "${j}.zip" audio
+  fi
+
+  if [ -d extra ] ; then
+    rar a -rr5 -s -m5 -r "${j}.rar" extra
+  fi
+
+  if [ -f "${j}.zip" ] ; then
+    mv -iv "${j}.zip" ..
+  fi
+
+  if [ -f "${j}.rar" ] ; then
+    mv -iv "${j}.rar" ..
+  fi
+
+  cd ..
+done

@@ -1,0 +1,268 @@
+#!/bin/bash
+
+# qmus
+
+# This shell script is designed to process music album ZIP file archives,
+# calling music.py and organize.py to get the job done.  The script can
+# either be run interactively (using the -i option), or will submit jobs
+# using qsub, the TORQUE resource manager.
+
+# TORQUE used to be open source and freely distributed but today
+# appears to be proprietary closed source.
+# https://adaptivecomputing.com/cherry-services/torque-resource-manager/
+
+# TODO: In the future, look to integrate support for SLURM.
+
+RED='\e[1;31m'
+GREEN='\e[1;32m'
+WHITE='\e[0m'
+
+# trap ctrl-c and call ctrl_c()
+trap ctrl_c INT
+function ctrl_c() {
+  echo -e "${RED}\n** Trapped CTRL-C${WHITE}"
+  if [ -d "${temp}" ] ; then
+    echo -n "Clean up temp dir ${temp} (y/n)? ="
+    read k
+    if [ "${k}" == "y" ] ; then
+      rm -rfv ${temp}
+    fi
+  fi 
+  exit 4
+}
+function error() {
+  echo -e "${RED}\n** An error was detected, script aborting${WHITE}"
+  if [ -d "${temp}" ] ; then
+    echo -n "Clean up temp dir ${temp} (y/n)? ="
+    read k
+    if [ "${k}" == "y" ] ; then
+      rm -rfv ${temp}
+    fi
+  fi 
+  exit 4
+}
+
+# Show usage help
+function show_help() {
+  echo "qmus: Submit one or more music transcoding jobs for queue processing."
+  echo
+  echo "Usage: qmus [-i] [-c codec] [ -b bitrate] archive.zip [archive2.zip [archive3.zip] ...] destination"
+  echo
+  echo "  archive{}.zip : properly formatted music archive"
+  echo "  destination   : directory where the final mp3/m4a files should land"
+  echo
+  echo "  Options:"
+  echo "    -i          : Interactive mode; do a serial foreground job instead of qsub."
+  echo "    -l logdir   : Log directory for qsub jobs (default: ~)"
+  echo "    -c codec    : Specify mp3 or aac; option passed through to hos.py"
+  echo "    -b bitrate  : Specify encoding bitrate; option passed through to hos.py"
+  echo
+}
+
+# If no options provided, then just show the help
+if [ -z "${1}" ] ; then
+  show_help
+  exit 0
+fi
+
+# Set option defaults
+interactive="false"
+logdir="${HOME}"
+
+# Parse command line arguments
+while [ ! -z "${1}" ] ; do
+
+  if [ "${1}" == "-i" ] ; then
+
+    interactive="true"
+
+  elif [ "${1}" == "-c" ] ; then
+
+    shift
+    codec="${1}"
+    if [ -z "${codec}" ] ; then
+      echo -e "${RED}ERROR: -c option detected, but no value for CODEC given.${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    if [ "${codec}" != "aac" ] && [ "${codec}" != "mp3" ] ; then
+      echo -e "${RED}ERROR: -c option detected, but ${codec} is not a valid codec."
+      echo -e "             Only mp3 or aac are permitted.${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    codec="-c ${codec}"
+
+  elif [ "${1}" == "-b" ] ; then
+
+    shift
+    bitrate="${1}"
+    if [ -z "${bitrate}" ] || [ -f "${bitrate}" ] || [ -d "${bitrate}" ] || [ "${bitrate:0:1}" == "-" ] ; then
+      echo -e "${RED}ERROR: -b option detected, but no value for BITRATE given.${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    bitrate="-b ${bitrate}"
+
+  elif [ "${1}" == "-l" ] ; then
+
+    shift
+    logdir="${1}"
+    if [ ! -d "${logdir}" ] ; then
+      echo -e "${RED}ERROR: -l option detected, but no valid directory specified for logs.${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+
+  elif [ -f "${1}" ] ; then
+
+    filetype=$(file "${1}")
+    filetype_short=${filetype#*:}
+    filetype_short=${filetype_short:1:16}
+
+    if [ "${filetype_short}" != "Zip archive data" ] ; then
+      echo -e "${RED}ERROR: ${1} is not a valid ZIP file!"
+      echo -e "       It seems to be${filetype#*:}${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    zips="${zips} ${1}"
+
+  elif [ -d "${1}" ] ; then
+
+    if [ ! -z "${dest}" ] ; then
+      echo -e "${RED}ERROR: More than one destination directory supplied."
+      echo -e "       Directory 1: ${dest}"
+      echo -e "       Directory 2: ${1}${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    dest="${1}"
+
+  else
+
+    echo -e "${RED}ERROR: Unrecognized option \`${1}${WHITE}'"
+    echo
+    show_help
+    exit 1
+
+  fi
+shift
+done
+
+
+
+# Check if everything is all set to continue
+if [ -z "${zips}" ] ; then
+  echo -e "${RED}ERROR: No input ZIP files provided.  Please specify one or more.${WHITE}"
+  echo
+  show_help
+  exit 1
+fi
+if [ ! -d "${dest}" ] ; then
+  echo -e "${RED}ERROR: No destination directory provided.  Please specify one.${WHITE}"
+  echo
+  show_help
+  exit 1
+fi
+
+
+# Get real paths of directories
+#dest=$(realpath "${dest}")
+pushd "${dest}" >/dev/null
+if [ ! $? -eq 0 ] ; then
+  echo -e "${RED}ERROR: Could not cd to directory \"${dest}\".${WHITE}"
+  echo
+  show_help
+  exit 1
+fi
+dest="$(pwd)"
+popd >/dev/null
+
+#logdir=$(realpath "${logdir}")
+pushd "${logdir}"
+if [ ! $? -eq 0 ] ; then
+  echo -e "${RED}ERROR: Could not cd to directory \"${logdir}\".${WHITE}"
+  echo
+  show_help
+  exit 1
+fi
+logdir="$(pwd)"
+popd > /dev/null
+
+
+# Loop through the ZIP files
+for zip in ${zips} ; do
+
+  zipd=${zip%.*}   # Strip off the file extension (.zip)
+  zipd=${zipd##*/} # Strip off any prepended path (everything before the last "/" occurrence)
+  if [ "${interactive}" == "true" ] ; then
+    echo "Processing ${zipd}..."
+    temp=$(mktemp -d)
+    unzip ${zip} -d ${temp}
+    if [ ! $? -eq 0 ] ; then
+      error
+    fi
+    pushd ${temp}
+    music.py ${codec} ${bitrate} -r
+    if [ ! $? -eq 0 ] ; then
+      error
+    fi
+    organize.py -m -c -r index* "${dest}"
+    if [ ! $? -eq 0 ] ; then
+      error
+    fi
+    popd
+    rm -rfv ${temp}
+  else
+    echo -n "Processing ${zipd}..."
+
+script=$(mktemp)
+
+cat << eof > ${script}
+#!/bin/bash
+
+#PBS -j oe
+#PBS -o "${logdir}/${zipd}.log"
+#PBS -l nodes=1:ppn=1
+#PBS -N ${zipd}
+
+module load audio-scripts
+cd \${PBS_O_WORKDIR}
+
+if [ ! -d "\${TMPDIR}" ] ; then
+  TMPDIR=/tmp
+fi
+
+temp=\$(mktemp -d -p \${TMPDIR})
+unzip ${zip} -d \${temp}
+if [ ! \$? -eq 0 ] ; then
+  exit 4
+fi
+pushd \${temp}
+eof
+echo "music.py ${codec} ${bitrate} -r">>${script}
+echo "if [ ! \$? -eq 0 ] ; then">>${script}
+echo "  exit 4">>${script}
+echo "fi">>${script}
+echo "organize.py -m -c -r index* \"${dest}\"">>${script}
+echo "if [ ! \$? -eq 0 ] ; then">>${script}
+echo "  exit 4">>${script}
+echo "fi">>${script}
+cat << eof >> ${script}
+popd
+rm -rfv \${temp}
+eof
+
+qsub ${script}
+rm -f ${script}
+
+  fi
+
+done
