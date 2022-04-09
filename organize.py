@@ -62,7 +62,7 @@ def path_create(metadata):
   if title == '':
     title = 'Untitled'
   # Track Number 
-  if metadata['track'][0] > 0:
+  if metadata['track'][0] > 0 or metadata['track'][1] > 0:
     track = '{:02}'.format(metadata['track'][0]) 
   else:
     track = ''
