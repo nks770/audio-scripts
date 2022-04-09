@@ -54,6 +54,7 @@ function show_help() {
   echo "  Options:"
   echo "    -i          : Interactive mode; do a serial foreground job instead of qsub."
   echo "    -l logdir   : Log directory for qsub jobs (default: ~)"
+  echo "    -t tmpdir   : Directory for temporary files (default: /tmp)"
   echo "    -c codec    : Specify mp3 or aac; option passed through to hos.py"
   echo "    -b bitrate  : Specify encoding bitrate; option passed through to hos.py"
   echo
@@ -68,6 +69,8 @@ fi
 # Set option defaults
 interactive="false"
 logdir="${HOME}"
+tempdir=/tmp
+custom_temp=0
 
 # Parse command line arguments
 while [ ! -z "${1}" ] ; do
@@ -113,6 +116,18 @@ while [ ! -z "${1}" ] ; do
     logdir="${1}"
     if [ ! -d "${logdir}" ] ; then
       echo -e "${RED}ERROR: -l option detected, but no valid directory specified for logs.${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+
+  elif [ "${1}" == "-t" ] ; then
+
+    shift
+    tempdir="${1}"
+    custom_temp=1
+    if [ ! -d "${tempdir}" ] ; then
+      echo -e "${RED}ERROR: -t option detected, but no valid temporary directory specified.${WHITE}"
       echo
       show_help
       exit 1
@@ -186,7 +201,7 @@ dest="$(pwd)"
 popd >/dev/null
 
 #logdir=$(realpath "${logdir}")
-pushd "${logdir}"
+pushd "${logdir}" > /dev/null
 if [ ! $? -eq 0 ] ; then
   echo -e "${RED}ERROR: Could not cd to directory \"${logdir}\".${WHITE}"
   echo
@@ -194,6 +209,17 @@ if [ ! $? -eq 0 ] ; then
   exit 1
 fi
 logdir="$(pwd)"
+popd > /dev/null
+
+#tempdir=$(realpath "${tempdir}")
+pushd "${tempdir}" > /dev/null
+if [ ! $? -eq 0 ] ; then
+  echo -e "${RED}ERROR: Could not cd to directory \"${tempdir}\".${WHITE}"
+  echo
+  show_help
+  exit 1
+fi
+tempdir="$(pwd)"
 popd > /dev/null
 
 
@@ -204,7 +230,7 @@ for zip in ${zips} ; do
   zipd=${zipd##*/} # Strip off any prepended path (everything before the last "/" occurrence)
   if [ "${interactive}" == "true" ] ; then
     echo "Processing ${zipd}..."
-    temp=$(mktemp -d)
+    temp=$(mktemp -d -p "${tempdir}")
     unzip ${zip} -d ${temp}
     if [ ! $? -eq 0 ] ; then
       error
@@ -240,19 +266,41 @@ if [ ! -d "\${TMPDIR}" ] ; then
   TMPDIR=/tmp
 fi
 
+eof
+
+if [ "${custom_temp}" == "1" ] ; then
+cat << eof >> ${script}
+if [ -d "${tempdir}" ] ; then
+  tempdir="${tempdir}"
+else
+  tempdir="\${TMPDIR}"
+fi
+temp=\$(mktemp -d -p "\${tempdir}")
+eof
+else
+cat << eof >> ${script}
 temp=\$(mktemp -d -p \${TMPDIR})
+eof
+fi
+
+cat << eof >> ${script}
 unzip ${zip} -d \${temp}
 if [ ! \$? -eq 0 ] ; then
+  rm -rfv \${temp}
   exit 4
 fi
 pushd \${temp}
 eof
 echo "music.py ${codec} ${bitrate} -r">>${script}
 echo "if [ ! \$? -eq 0 ] ; then">>${script}
+echo "  popd">>${script}
+echo "  rm -rfv \${temp}">>${script}
 echo "  exit 4">>${script}
 echo "fi">>${script}
 echo "organize.py -m -c -r index* \"${dest}\"">>${script}
 echo "if [ ! \$? -eq 0 ] ; then">>${script}
+echo "  popd">>${script}
+echo "  rm -rfv \${temp}">>${script}
 echo "  exit 4">>${script}
 echo "fi">>${script}
 cat << eof >> ${script}
