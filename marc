@@ -5,7 +5,7 @@ for j in ${@} ; do
   cd ${j}
 
   if [ -d audio ] ; then
-    zip -v -r "${j}.zip" audio
+    zip -9rv "${j}.zip" audio
   fi
 
   if [ -d extra ] ; then
