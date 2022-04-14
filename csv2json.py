@@ -25,10 +25,16 @@ def ingestCSV(csvfile,index):
   print('Processing {}...'.format(csvfile))
   
   albumraw = []
-  with open(csvfile) as csvalbum:
-    albumfile = csv.reader(csvalbum, delimiter=',')
-    for row in albumfile:
-      albumraw.extend([row])
+  try:
+    with open(csvfile) as csvalbum:
+      albumfile = csv.reader(csvalbum, delimiter=',')
+      for row in albumfile:
+        albumraw.extend([row])
+  except UnicodeDecodeError:
+    with open(csvfile,encoding='ISO-8859-1') as csvalbum:
+      albumfile = csv.reader(csvalbum, delimiter=',')
+      for row in albumfile:
+        albumraw.extend([row])
   
   current = {'index':index}
   tracks = []
