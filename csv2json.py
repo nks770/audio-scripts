@@ -26,7 +26,8 @@ def ingestCSV(csvfile,index):
   
   albumraw = []
   try:
-    with open(csvfile) as csvalbum:
+    #with open(csvfile) as csvalbum:
+    with open(csvfile,encoding='windows-1252') as csvalbum:
       albumfile = csv.reader(csvalbum, delimiter=',')
       for row in albumfile:
         albumraw.extend([row])
