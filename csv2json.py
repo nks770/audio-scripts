@@ -145,6 +145,12 @@ for j in metadata:
       else:
         raise Exception('Could not find {}'.format(f))
 
+    # Nullify cuesheets and logs lists if there are none
+    #if len(j['cuesheets']) == 0:
+    #  j['cuesheets'] = None
+    #if len(j['logs']) == 0:
+    #  j['logs'] = None
+
 # Output Metadata JSON
 with open('metadata.json','w') as outjson:
   json.dump(metadata,outjson,indent=2)

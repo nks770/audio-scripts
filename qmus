@@ -55,8 +55,9 @@ function show_help() {
   echo "    -i          : Interactive mode; do a serial foreground job instead of qsub."
   echo "    -l logdir   : Log directory for qsub jobs (default: ~)"
   echo "    -t tmpdir   : Directory for temporary files (default: /tmp)"
-  echo "    -c codec    : Specify mp3 or aac; option passed through to hos.py"
-  echo "    -b bitrate  : Specify encoding bitrate; option passed through to hos.py"
+  echo "    -c codec    : Specify mp3 or aac; option passed through to music.py"
+  echo "    -b bitrate  : Specify encoding bitrate; option passed through to music.py"
+  echo "    -e edition  : Specify album edition; option passed through to music.py"
   echo
 }
 
@@ -120,6 +121,24 @@ while [ ! -z "${1}" ] ; do
       show_help
       exit 1
     fi
+
+  elif [ "${1}" == "-e" ] ; then
+
+    shift
+    ed="${1}"
+    if [ -z "${ed}" ] ; then
+      echo -e "${RED}ERROR: -e option detected, but no value for ALBUM EDITION given.${WHITE}"
+      echo
+      show_help
+      exit 1
+    elif [ "${ed}" != "default" ] && [ "${ed}" != "original" ] && [ "${ed}" != "optimized" ] && [ "${ed}" != "all" ]  ; then
+      echo -e "${RED}ERROR: -e option detected, but ${ed} is not a valid album edition."
+      echo -e "             Please choose one of [ default, original, optimized, all ].${WHITE}"
+      echo
+      show_help
+      exit 1
+    fi
+    edition="-e ${ed}"
 
   elif [ "${1}" == "-t" ] ; then
 
@@ -236,7 +255,7 @@ for zip in ${zips} ; do
       error
     fi
     pushd ${temp}
-    music.py ${codec} ${bitrate} -r
+    music.py ${codec} ${bitrate} ${edition} -r
     if [ ! $? -eq 0 ] ; then
       error
     fi
@@ -291,7 +310,7 @@ if [ ! \$? -eq 0 ] ; then
 fi
 pushd \${temp}
 eof
-echo "music.py ${codec} ${bitrate} -r">>${script}
+echo "music.py ${codec} ${bitrate} ${edition} -r">>${script}
 echo "if [ ! \$? -eq 0 ] ; then">>${script}
 echo "  popd">>${script}
 echo "  rm -rfv \${temp}">>${script}
