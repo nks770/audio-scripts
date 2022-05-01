@@ -205,10 +205,12 @@ for a in active:
   displayBanner(b)
 
   # Set up formats for file names 
+  max_did=math.floor(math.log10(len(b['discs'])))+1
   max_tid=math.floor(math.log10(len(b['tracks'])))+1
-  wav_format='index{}'.format(b['index']) + 'disc{:02}track{:0' + str(max_tid)+'}.wav'
-  mp3_format='index{}'.format(b['index']) + 'disc{:02}track{:0' + str(max_tid)+'}.mp3'
-  m4a_format='index{}'.format(b['index']) + 'disc{:02}track{:0' + str(max_tid)+'}.m4a'
+  ____format='index{}'.format(b['index']) + 'disc{:0' + str(max_did)+ '}track{:0' + str(max_tid)+'}'
+  wav_format=____format + '.wav'
+  mp3_format=____format + '.mp3'
+  m4a_format=____format + '.m4a'
 
   # Loop through discs
   for di in b['discs']:
@@ -218,12 +220,21 @@ for a in active:
 
     for tr in tracklist:
 
-      # Step 1: Decode the flac file to wave
+      # Step 1: Decode the flac/m4a file to wave
       if b['prefix'] == None:
         flacd = ['flac','-f','-d',tr['file'],'--output-name={}'.format(wav_format.format(tr['disc'],tr['track']))]
+        m4ad  = ['ffmpeg','-i',tr['file'],'-acodec','pcm_s16le','{}'.format(wav_format.format(tr['disc'],tr['track']))]
       else:
         flacd = ['flac','-f','-d','/'.join([b['prefix'],tr['file']]),'--output-name={}'.format(wav_format.format(tr['disc'],tr['track']))]
-      cmds.extend([flacd])
+        m4ad  = ['ffmpeg','-i','/'.join([b['prefix'],tr['file']]),'-acodec','pcm_s16le','{}'.format(wav_format.format(tr['disc'],tr['track']))]
+
+      if tr['file'][-5:] == '.flac':
+        cmds.extend([flacd])
+      elif tr['file'][-4:] == '.m4a':
+        cmds.extend([m4ad])
+      else:
+        raise Exception("Unknown file type extension for {}".format(tr['file']))
+
       temp_files.extend([wav_format.format(tr['disc'],tr['track'])])
 
       # Step 2a: Encode the wave to MP3
@@ -244,8 +255,12 @@ for a in active:
                      '--tv','TCON={}'.format(b['genre'])])
         if b['compilation']:
           lame.extend(['--tv','TCMP=1'])
-        lame.extend(['--tc','{} {}'.format(b['label'],b['catalog'])])
-        lame.extend(['--tv','TPUB={}'.format(b['label'])])
+        if b['label'] != None and b['catalog'] != None:
+          lame.extend(['--tc','{} {}'.format(b['label'],b['catalog'])])
+        elif b['label'] != None:
+          lame.extend(['--tc','{}'.format(b['label'])])
+        if b['label'] != None:
+          lame.extend(['--tv','TPUB={}'.format(b['label'])])
         if b['coverart'] != None:
           if b['prefix'] == None:
             lame.extend(['--ti',b['coverart']])
@@ -268,7 +283,10 @@ for a in active:
                  '-genre',b['genre']]
         if b['compilation']:
           mp4tags.extend(['-compilation','1']),
-        mp4tags.extend(['-comment','{} {}'.format(b['label'],b['catalog'])])
+        if b['label'] != None and b['catalog'] != None:
+          mp4tags.extend(['-comment','{} {}'.format(b['label'],b['catalog'])])
+        elif b['label'] != None:
+          mp4tags.extend(['-comment','{}'.format(b['label'])])
         mp4tags.extend(['-tool','Fraunhofer FDK AAC {}'.format(libfdk_aac_version)])
         mp4tags.extend([m4a_format.format(tr['disc'],tr['track'])])
         cmds.extend([ffmpeg,mp4tags])
