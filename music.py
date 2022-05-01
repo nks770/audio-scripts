@@ -41,6 +41,8 @@ parser.add_argument('-c','--codec',metavar='CODEC',dest='codec',
                     help='Output codec to use for transcoding. (Default: mp3)')
 parser.add_argument('-b','--bitrate',metavar='BITRATE',dest='bitrate',
                     help='Specify the output bitrate (CBR) or quality (VBR).')
+parser.add_argument('-i','--index',metavar='INDEX_VALUE',dest='rqindex',
+                    help='Process a specific album index. (Default: choose based on other flags)')
 parser.add_argument('-r','--run',action='store_true',dest='run',
                     help='Actually run the transcode.')
 parser.add_argument('-t','--test',action='store_true',dest='test',
@@ -48,6 +50,11 @@ parser.add_argument('-t','--test',action='store_true',dest='test',
 parser.add_argument('-v','--verbose',action='store_true',dest='verbose',
                     help='Verbose mode.')
 args=parser.parse_args()
+
+try:
+  rqindex = [int(i) for i in args.rqindex.split(',')]
+except (AttributeError,ValueError) as e:
+  rqindex = None
 
 # Validate requested bitrate
 codec = args.codec
@@ -181,6 +188,11 @@ if args.edition in ('default','original','optimized'):
 if len(active) == 0 or args.edition == 'all':
   active.extend([x['index'] for i, x in enumerate(metadata) if x['index'] != -1])
 
+# If specific index/indices were requested, then use those if they are valid
+if rqindex != None:
+  active = []
+  active.extend([i for i in rqindex if i in [x['index'] for x in metadata if x['index'] != -1]])
+
 if len(active) < 1:
   raise Exception('Could not identify any album editions to load.')
 
@@ -221,12 +233,17 @@ for a in active:
     for tr in tracklist:
 
       # Step 1: Decode the flac/m4a file to wave
+
+      # bitexact: strips out metadata, "Only write platform-, build- and time-independent data.
+      #           This ensures that file and data checksums are reproducible and match between
+      #           platforms. Its primary use is for regression testing."
+
       if b['prefix'] == None:
         flacd = ['flac','-f','-d',tr['file'],'--output-name={}'.format(wav_format.format(tr['disc'],tr['track']))]
-        m4ad  = ['ffmpeg','-i',tr['file'],'-acodec','pcm_s16le','{}'.format(wav_format.format(tr['disc'],tr['track']))]
+        m4ad  = ['ffmpeg','-i',tr['file'],'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(wav_format.format(tr['disc'],tr['track']))]
       else:
         flacd = ['flac','-f','-d','/'.join([b['prefix'],tr['file']]),'--output-name={}'.format(wav_format.format(tr['disc'],tr['track']))]
-        m4ad  = ['ffmpeg','-i','/'.join([b['prefix'],tr['file']]),'-acodec','pcm_s16le','{}'.format(wav_format.format(tr['disc'],tr['track']))]
+        m4ad  = ['ffmpeg','-i','/'.join([b['prefix'],tr['file']]),'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(wav_format.format(tr['disc'],tr['track']))]
 
       if tr['file'][-5:] == '.flac':
         cmds.extend([flacd])
@@ -255,10 +272,15 @@ for a in active:
                      '--tv','TCON={}'.format(b['genre'])])
         if b['compilation']:
           lame.extend(['--tv','TCMP=1'])
-        if b['label'] != None and b['catalog'] != None:
-          lame.extend(['--tc','{} {}'.format(b['label'],b['catalog'])])
-        elif b['label'] != None:
-          lame.extend(['--tc','{}'.format(b['label'])])
+
+        if 'comment' in tr.keys():
+          lame.extend(['--tc',tr['comment']])
+        else:
+          if b['label'] != None and b['catalog'] != None:
+            lame.extend(['--tc','{} {}'.format(b['label'],b['catalog'])])
+          #elif b['label'] != None:
+          #  lame.extend(['--tc',b['label']])
+
         if b['label'] != None:
           lame.extend(['--tv','TPUB={}'.format(b['label'])])
         if b['coverart'] != None:
@@ -267,6 +289,9 @@ for a in active:
           else:
             lame.extend(['--ti','/'.join([b['prefix'],b['coverart']])])
         cmds.extend([lame])
+
+
+      # Step 2b: Encode the wave to AAC
       if codec=='aac':
         ffmpeg=['ffmpeg','-i',wav_format.format(tr['disc'],tr['track']),'-acodec','libfdk_aac']
         if mode=="cbr":
@@ -283,10 +308,15 @@ for a in active:
                  '-genre',b['genre']]
         if b['compilation']:
           mp4tags.extend(['-compilation','1']),
-        if b['label'] != None and b['catalog'] != None:
-          mp4tags.extend(['-comment','{} {}'.format(b['label'],b['catalog'])])
-        elif b['label'] != None:
-          mp4tags.extend(['-comment','{}'.format(b['label'])])
+
+        if 'comment' in tr.keys():
+          mp4tags.extend(['-comment',tr['comment']])
+        else:
+          if b['label'] != None and b['catalog'] != None:
+            mp4tags.extend(['-comment','{} {}'.format(b['label'],b['catalog'])])
+          #elif b['label'] != None:
+          #  mp4tags.extend(['-comment',b['label']])
+
         mp4tags.extend(['-tool','Fraunhofer FDK AAC {}'.format(libfdk_aac_version)])
         mp4tags.extend([m4a_format.format(tr['disc'],tr['track'])])
         cmds.extend([ffmpeg,mp4tags])

@@ -40,13 +40,21 @@ def ingestCSV(csvfile,index):
   current = {'index':index}
   tracks = []
   reading_tracklist = False
+  ext_properties = []
   
   for e in albumraw:
     if reading_tracklist:
-      tracks.extend([{'disc':int(e[0]),'track':int(e[1]),'artist':e[2],'title':e[3],'file':e[4]}])
+      ct={'disc':int(e[0]),'track':int(e[1]),'artist':e[2],'title':e[3],'file':e[4]}
+      for i,p in enumerate(ext_properties):
+        if e[5+i] != '':
+          ct[p] = e[5+i]
+      tracks.extend([ct])
     else:
       if e[0] == 'disc' and e[1] == 'track':
         reading_tracklist = True
+        for i in range(len(e)-5):
+          if e[5+i] != '':
+            ext_properties.extend([e[5+i]])
       if e[0] in ('prefix','artist','title','edition','date','genre','label','barcode','catalog','coverart','source','torrent'):
         current[e[0]] = e[1]
         if e[1] == '':
