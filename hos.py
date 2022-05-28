@@ -139,7 +139,7 @@ try:
 except:
   pgm2='0'
 if pgm1 != '0' and pgm1 != pgm2:
-  raise Exception('Conflict in determining the progran number ({} vs {}).'.format(pgm1,pgm2))
+  raise Exception('Conflict in determining the program number ({} vs {}).'.format(pgm1,pgm2))
 pgm=pgm2
 
 # Check whether a program was successfully loaded

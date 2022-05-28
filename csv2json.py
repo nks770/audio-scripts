@@ -55,7 +55,7 @@ def ingestCSV(csvfile,index):
         for i in range(len(e)-5):
           if e[5+i] != '':
             ext_properties.extend([e[5+i]])
-      if e[0] in ('prefix','artist','title','edition','date','genre','label','barcode','catalog','coverart','source','torrent'):
+      if e[0] in ('prefix','artist','title','edition','date','genre','label','barcode','catalog','coverart','source','torrent','url'):
         current[e[0]] = e[1]
         if e[1] == '':
           current[e[0]] = None
