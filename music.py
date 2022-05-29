@@ -221,6 +221,7 @@ for a in active:
   max_tid=math.floor(math.log10(len(b['tracks'])))+1
   ____format='index{}'.format(b['index']) + 'disc{:0' + str(max_did)+ '}track{:0' + str(max_tid)+'}'
   wav_format=____format + '.wav'
+  tmp_format=____format + '_.wav'
   mp3_format=____format + '.mp3'
   m4a_format=____format + '.m4a'
 
@@ -232,6 +233,11 @@ for a in active:
 
     for tr in tracklist:
 
+      if 'start' in tr.keys() or 'end' in tr.keys():
+        dec_format = tmp_format
+      else:
+        dec_format = wav_format
+
       # Step 1: Decode the flac/m4a file to wave
 
       # bitexact: strips out metadata, "Only write platform-, build- and time-independent data.
@@ -239,11 +245,11 @@ for a in active:
       #           platforms. Its primary use is for regression testing."
 
       if b['prefix'] == None:
-        flacd = ['flac','-f','-d',tr['file'],'--output-name={}'.format(wav_format.format(tr['disc'],tr['track']))]
-        m4ad  = ['ffmpeg','-i',tr['file'],'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(wav_format.format(tr['disc'],tr['track']))]
+        flacd = ['flac','-f','-d',tr['file'],'--output-name={}'.format(dec_format.format(tr['disc'],tr['track']))]
+        m4ad  = ['ffmpeg','-i',tr['file'],'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(dec_format.format(tr['disc'],tr['track']))]
       else:
-        flacd = ['flac','-f','-d','/'.join([b['prefix'],tr['file']]),'--output-name={}'.format(wav_format.format(tr['disc'],tr['track']))]
-        m4ad  = ['ffmpeg','-i','/'.join([b['prefix'],tr['file']]),'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(wav_format.format(tr['disc'],tr['track']))]
+        flacd = ['flac','-f','-d','/'.join([b['prefix'],tr['file']]),'--output-name={}'.format(dec_format.format(tr['disc'],tr['track']))]
+        m4ad  = ['ffmpeg','-i','/'.join([b['prefix'],tr['file']]),'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(dec_format.format(tr['disc'],tr['track']))]
 
       if tr['file'][-5:] == '.flac':
         cmds.extend([flacd])
@@ -252,7 +258,21 @@ for a in active:
       else:
         raise Exception("Unknown file type extension for {}".format(tr['file']))
 
-      temp_files.extend([wav_format.format(tr['disc'],tr['track'])])
+      temp_files.extend([dec_format.format(tr['disc'],tr['track'])])
+
+      atrim = None
+
+      if 'start' in tr.keys() and 'end' in tr.keys():
+        atrim = 'atrim={}:{}'.format(tr['start'],tr['end'])
+      elif 'start' in tr.keys():
+        atrim = 'atrim=start={}'.format(tr['start'])
+      elif 'end' in tr.keys():
+        atrim = 'atrim=end={}'.format(tr['end'])
+      
+      if atrim != None:
+        trim  = ['ffmpeg','-i',dec_format.format(tr['disc'],tr['track']),'-af',atrim,wav_format.format(tr['disc'],tr['track'])]
+        cmds.extend([trim])
+        temp_files.extend([wav_format.format(tr['disc'],tr['track'])])
 
       # Step 2a: Encode the wave to MP3
       if codec=='mp3':

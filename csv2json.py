@@ -47,7 +47,10 @@ def ingestCSV(csvfile,index):
       ct={'disc':int(e[0]),'track':int(e[1]),'artist':e[2],'title':e[3],'file':e[4]}
       for i,p in enumerate(ext_properties):
         if e[5+i] != '':
-          ct[p] = e[5+i]
+          if p in ('start','end'):
+            ct[p] = float(e[5+i])
+          else:
+            ct[p] = e[5+i]
       tracks.extend([ct])
     else:
       if e[0] == 'disc' and e[1] == 'track':
