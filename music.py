@@ -246,15 +246,19 @@ for a in active:
 
       if b['prefix'] == None:
         flacd = ['flac','-f','-d',tr['file'],'--output-name={}'.format(dec_format.format(tr['disc'],tr['track']))]
+        mp3d = ['lame','--decode',tr['file'],dec_format.format(tr['disc'],tr['track'])]
         m4ad  = ['ffmpeg','-i',tr['file'],'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(dec_format.format(tr['disc'],tr['track']))]
       else:
         flacd = ['flac','-f','-d','/'.join([b['prefix'],tr['file']]),'--output-name={}'.format(dec_format.format(tr['disc'],tr['track']))]
+        mp3d = ['lame','--decode','/'.join([b['prefix'],tr['file']]),dec_format.format(tr['disc'],tr['track'])]
         m4ad  = ['ffmpeg','-i','/'.join([b['prefix'],tr['file']]),'-acodec','pcm_s16le','-map_metadata','-1','-fflags','+bitexact','-flags:a','+bitexact','-flags:v','+bitexact','{}'.format(dec_format.format(tr['disc'],tr['track']))]
 
       if tr['file'][-5:] == '.flac':
         cmds.extend([flacd])
       elif tr['file'][-4:] == '.m4a':
         cmds.extend([m4ad])
+      elif tr['file'][-4:] == '.mp3':
+        cmds.extend([mp3d])
       else:
         raise Exception("Unknown file type extension for {}".format(tr['file']))
 
