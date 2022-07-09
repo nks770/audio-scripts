@@ -14,6 +14,8 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description='Convert CSV metadata into JSON.')
 parser.add_argument('albumdata',metavar='albumdata',nargs='*',default='',
                     help='CSV file(s) with album metadata.')
+parser.add_argument('-u','--unicode',action='store_true',dest='unicode',
+                    help='Assume the input CSV file is encoded with UTF-8.')
 args=parser.parse_args()
 
 print('#'*34)
@@ -25,17 +27,23 @@ def ingestCSV(csvfile,index):
   print('Processing {}...'.format(csvfile))
   
   albumraw = []
-  try:
-    #with open(csvfile) as csvalbum:
-    with open(csvfile,encoding='windows-1252') as csvalbum:
-      albumfile = csv.reader(csvalbum, delimiter=',')
-      for row in albumfile:
-        albumraw.extend([row])
-  except UnicodeDecodeError:
-    with open(csvfile,encoding='ISO-8859-1') as csvalbum:
-      albumfile = csv.reader(csvalbum, delimiter=',')
-      for row in albumfile:
-        albumraw.extend([row])
+  if args.unicode:
+      with open(csvfile,encoding='utf-8') as csvalbum:
+        albumfile = csv.reader(csvalbum, delimiter=',')
+        for row in albumfile:
+          albumraw.extend([row])
+  else:
+    try:
+      #with open(csvfile) as csvalbum:
+      with open(csvfile,encoding='windows-1252') as csvalbum:
+        albumfile = csv.reader(csvalbum, delimiter=',')
+        for row in albumfile:
+          albumraw.extend([row])
+    except UnicodeDecodeError:
+      with open(csvfile,encoding='ISO-8859-1') as csvalbum:
+        albumfile = csv.reader(csvalbum, delimiter=',')
+        for row in albumfile:
+          albumraw.extend([row])
   
   current = {'index':index}
   tracks = []
