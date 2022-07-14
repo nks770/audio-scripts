@@ -41,6 +41,8 @@ parser.add_argument('-c','--codec',metavar='CODEC',dest='codec',
                     help='Output codec to use for transcoding. (Default: mp3)')
 parser.add_argument('-b','--bitrate',metavar='BITRATE',dest='bitrate',
                     help='Specify the output bitrate (CBR) or quality (VBR).')
+parser.add_argument('-a','--alt',action='store_true',dest='alt',
+                    help='Use alternate album title if available.')
 parser.add_argument('-i','--index',metavar='INDEX_VALUE',dest='rqindex',
                     help='Process a specific album index. (Default: choose based on other flags)')
 parser.add_argument('-r','--run',action='store_true',dest='run',
@@ -55,6 +57,11 @@ try:
   rqindex = [int(i) for i in args.rqindex.split(',')]
 except (AttributeError,ValueError) as e:
   rqindex = None
+
+# Set album title dictionary key
+album_title_key = 'title'
+if args.alt:
+  album_title_key = 'alt_title'
 
 # Validate requested bitrate
 codec = args.codec
@@ -206,9 +213,11 @@ for a in active:
   b = metadata[[i for i, x in enumerate(metadata) if x['index'] == a][0]]
 
   # Format the album title and edition for display
-  b['album_title'] = '{} [{}]'.format(b['title'],b['edition'])
+  if 'alt_title' not in b.keys():
+    album_title_key = 'title'
+  b['album_title'] = '{} [{}]'.format(b[album_title_key],b['edition'])
   if b['edition'] == None:
-    b['album_title'] = b['title']
+    b['album_title'] = b[album_title_key]
 
   # Determine maximum number of discs
   b['discs'] = list(set([x['disc'] for x in b['tracks']]))
