@@ -219,6 +219,14 @@ for a in active:
   if b['edition'] == None:
     b['album_title'] = b[album_title_key]
 
+  # Set the sortalbum and sortalbumartist
+  if 'sortalbumartist' not in b.keys():
+    b['sortalbumartist']=b['artist']
+  if 'sortalbum' not in b.keys():
+    b['sortalbum']=b['album_title']
+  elif b['edition'] != None:
+    b['sortalbum'] = '{} [{}]'.format(b['sortalbum'],b['edition'])
+
   # Determine maximum number of discs
   b['discs'] = list(set([x['disc'] for x in b['tracks']]))
 
@@ -287,6 +295,10 @@ for a in active:
         cmds.extend([trim])
         temp_files.extend([wav_format.format(tr['disc'],tr['track'])])
 
+      # Sort artist
+      if 'sortartist' not in tr.keys():
+        tr['sortartist'] = tr['artist']
+
       # Step 2a: Encode the wave to MP3
       if codec=='mp3':
         lame=['lame','-m','j']
@@ -299,6 +311,9 @@ for a in active:
                      '--ta',tr['artist'],
                      '--tl',b['album_title'],
                      '--tv','TPE2={}'.format(b['artist']),
+                     '--tv','TSOA={}'.format(b['sortalbum']),
+                     '--tv','TSOP={}'.format(tr['sortartist']),
+                     '--tv','TSO2={}'.format(b['sortalbumartist']),
                      '--ty','{}'.format(b['year']),
                      '--tn','{}/{}'.format(tr['track'],numtracks),
                      '--tv','TPOS={}/{}'.format(di,max(b['discs'])),
@@ -335,6 +350,9 @@ for a in active:
         mp4tags=['mp4tags','-song',tr['title'],'-artist',tr['artist'],
                  '-album',b['album_title'],
                  '-albumartist',b['artist'],
+                 '-sortalbum',b['sortalbum'],
+                 '-sortartist',tr['sortartist'],
+                 '-sortalbumartist',b['sortalbumartist'],
                  '-year','{}'.format(b['year']),
                  '-track',str(tr['track']),'-tracks',str(numtracks),
                  '-disk',str(di),'-disks',str(max(b['discs'])),
